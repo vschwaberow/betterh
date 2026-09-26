@@ -55,7 +55,49 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 5.4 Pre-flight --dry-run combination audit & estimator         |
 |  - 5.5 Actionable diagnostics with remediation tips               |
 |  - 5.6 Shell autocompletions & man-page generator                 |
-+-----------------------------------+-------------------------------+
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 7: Repository Hardening, CI & Expansion Prep            |
+|  - 7.1 GitHub Actions CI quality gate workflow                    |
+|  - 7.2 Wizard plan output (non-attack execution path)             |
+|  - 7.3 README, licenses, changelog, and dependabot automation     |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 8: Extended Protocols — SMTP, MySQL, and PostgreSQL       |
+|  - 8.1 SMTP PLAIN/LOGIN & multiline parsing                       |
+|  - 8.2 MySQL 4-byte framing & mysql_native_password               |
+|  - 8.3 PostgreSQL 3.0 & MD5 challenge authentication              |
+|  - 8.4 Extended protocol CLI wiring & integration tests           |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|           Phase 9: Modern Authentication Hardening                |
+|  - 9.1 Shared TLS TransportStream helper (tokio-rustls)           |
+|  - 9.2 SMTP STARTTLS (25/587) & implicit SMTPS (465)              |
+|  - 9.3 MySQL caching_sha2_password (SHA-256 scramble & fast auth) |
+|  - 9.4 PostgreSQL SCRAM-SHA-256 (RFC 5802 / RFC 7677 SASL)        |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|  Phase 10: Extended Infrastructure Protocols (Redis, IMAP, LDAP)  |
+|  - 10.1 Redis RESP wire module (inline & ACL AUTH)                |
+|  - 10.2 IMAP/IMAPS RFC 3501 tagged dialogue & STARTTLS            |
+|  - 10.3 LDAP/LDAPS RFC 4511 ASN.1 BER Simple Bind                 |
+|  - 10.4 Protocol CLI & Runner Wiring, Schemas & Tests             |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 11: Enterprise Protocol Feasibility (SMB & RDP)         |
+|  - 11.1 SMBv2/v3 & NTLMSSP Framing Architectural Feasibility      |
+|  - 11.2 RDP / CredSSP / NLA Framing Architectural Feasibility     |
++-------------------------------------------------------------------+
 ```
 
 ---
@@ -524,6 +566,120 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt --check
 ```
 
+---
+
+## Phase 9: Modern Authentication Hardening
+
+**Goal**: Upgrade existing database and mail protocol implementations to handle modern production cryptographic baselines: SMTP STARTTLS (25/587) and implicit SMTPS (465), MySQL 8+ `caching_sha2_password`, and PostgreSQL 10+ `SCRAM-SHA-256` (RFC 5802 / RFC 7677 SASL).
+
+### Tasks
+- [ ] **Task 9.1: Shared TLS TransportStream Helper**
+  - **Description**: Implement `TransportStream` enum (`src/protocols/tls.rs`) wrapping `Plain(TcpStream)` and `Tls(TlsStream<TcpStream>)`. Implement Tokio `AsyncRead`, `AsyncWrite`, and `Unpin`. Provide `wrap_tls(stream, host, insecure)` helper configuring Rustls client with SNI and optional certificate verification bypass for `--insecure`.
+  - **Acceptance**: Seamlessly upgrades plain streams to TLS without data loss. Reusable across SMTP, MySQL, IMAP, LDAP.
+  - **Files**: `src/protocols/tls.rs`, `src/protocols/mod.rs`
+  - **Verify**: Unit tests verifying TLS wrap and plain pass-through.
+
+- [ ] **Task 9.2: SMTP STARTTLS & Implicit SMTPS Upgrade**
+  - **Description**: Add STARTTLS detection from `250-STARTTLS` in `EHLO` response on ports 25 and 587. Send `STARTTLS\r\n`, verify `220` response, upgrade via `TransportStream`, and repeat `EHLO`. For port 465 (implicit TLS) or `target.ssl`, wrap stream immediately on connect before reading initial 220 banner. Respect `--insecure`.
+  - **Acceptance**: Successfully performs STARTTLS upgrade and authenticates against mock SMTP server.
+  - **Files**: `src/protocols/smtp.rs`
+  - **Verify**: Mock tests for STARTTLS handshake, implicit SMTPS, and rejection codes.
+
+- [ ] **Task 9.3: MySQL `caching_sha2_password` Authentication**
+  - **Description**: Add `caching_sha2_password` auth plugin handling using `sha2`. Compute SHA-256 double-hash scramble:
+    $$\text{scramble} = \text{SHA256}(\text{password}) \oplus \text{SHA256}(\text{SHA256}(\text{SHA256}(\text{password})) \parallel \text{salt})$$
+    Handle `0x00` OK (fast cache hit), `0x01, 0x03` (cache miss requiring full authentication over TLS or RSA-OAEP public key encryption), and `0xFF` ERR.
+  - **Acceptance**: Authenticates with `caching_sha2_password` against both fast-cache and full-auth mock handshakes.
+  - **Files**: `src/protocols/mysql.rs`
+  - **Verify**: Hermetic mock tests for `caching_sha2_password` in `src/protocols/mysql.rs`.
+
+- [ ] **Task 9.4: PostgreSQL `SCRAM-SHA-256` SASL Authentication**
+  - **Description**: Implement RFC 5802 / RFC 7677 `SCRAM-SHA-256` SASL mechanism using `sha2`, `hmac`, `pbkdf2`. Intercept `'R'` type 10 (`AuthenticationSASL`), exchange client nonce via `SASLInitialResponse`, parse server nonce, salt, and iteration count from `'R'` type 11 (`AuthenticationSASLContinue`), derive keys via PBKDF2 HMAC-SHA256, compute ClientProof, send `SASLResponse`, and verify `'R'` type 12 (`AuthenticationSASLFinal`) / type 0.
+  - **Acceptance**: Completes SASL handshake against mock PostgreSQL listener; accurately computes ClientProof.
+  - **Files**: `src/protocols/postgres.rs`
+  - **Verify**: Hermetic mock tests for `SCRAM-SHA-256` in `src/protocols/postgres.rs`.
+
+### Phase 9 Checkpoint
+
+```bash
+cargo test protocols::smtp protocols::mysql protocols::postgres
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 10: Extended Infrastructure Protocols — Redis, IMAP, and LDAP
+
+**Goal**: Implement native wire-level authentication testing for ubiquitous enterprise infrastructure services: Redis (RESP inline & ACL), IMAP/IMAPS (RFC 3501 tagged dialogue & STARTTLS), and LDAP/LDAPS (RFC 4511 Simple Bind via ASN.1 BER).
+
+### Tasks
+- [ ] **Task 10.1: Redis Protocol Module & Mock Harness**
+  - **Description**: Implement `RedisModule` (feature = `redis`) supporting RESP protocol on port 6379. Pre-flight probe with `PING\r\n`. Authenticate via `AUTH <password>\r\n` (inline) or `AUTH <username> <password>\r\n` (ACL). Map `+OK` to Success, `-WRONGPASS` / `-ERR invalid` to Failure, and connection errors / max clients to RateLimited(5s). SOCKS5 proxy support.
+  - **Acceptance**: Authenticates against mock RESP server for both inline and ACL auth.
+  - **Files**: `src/protocols/redis.rs`, `src/protocols/mod.rs`
+  - **Verify**: Hermetic mock tests in `src/protocols/redis.rs`.
+
+- [ ] **Task 10.2: IMAP/IMAPS Protocol Module & Mock Harness**
+  - **Description**: Implement `ImapModule` (feature = `imap`, dependency = `tokio-rustls`) supporting ports 143 (plain/STARTTLS) and 993 (implicit IMAPS). Parse greeting `* OK`, negotiate STARTTLS via `TransportStream` on 143 or wrap on 993, send tagged `A001 LOGIN "<username>" "<password>"\r\n`. Map `OK` to Success, `NO` to Failure, `* BYE` to RateLimited(5s). Send clean `LOGOUT`. SOCKS5 proxy support.
+  - **Acceptance**: Authenticates against mock IMAP server for plain, STARTTLS, and IMAPS.
+  - **Files**: `src/protocols/imap.rs`, `src/protocols/mod.rs`
+  - **Verify**: Hermetic mock tests in `src/protocols/imap.rs`.
+
+- [ ] **Task 10.3: LDAP/LDAPS Protocol Module & Mock Harness**
+  - **Description**: Implement `LdapModule` (feature = `ldap`, dependency = `tokio-rustls`) supporting ports 389 (plain) and 636 (implicit LDAPS). Encode ASN.1 BER `BindRequest` with MessageID, LDAP version 3, Name/DN, and Simple Password. Decode `BindResponse`: map resultCode 0 to Success, 49 to Failure, 53 to LockedOut, 51 to RateLimited. SOCKS5 proxy support.
+  - **Acceptance**: Completes Simple Bind against mock LDAP server and handles result codes correctly.
+  - **Files**: `src/protocols/ldap.rs`, `src/protocols/mod.rs`
+  - **Verify**: Hermetic mock tests in `src/protocols/ldap.rs`.
+
+- [ ] **Task 10.4: Extended Protocol Wiring, CLI Options & Integration Tests**
+  - **Description**: Wire new protocols into CLI and runner:
+    - Add `Redis`, `Imap`, `Imaps`, `Ldap`, `Ldaps` to `Service` enum in `src/cli.rs`.
+    - Register default ports and URL schemes (`redis://`, `imap://`, `imaps://`, `ldap://`, `ldaps://`).
+    - Wire `build_module` in `src/engine/runner.rs`.
+    - Update `Cargo.toml` features (`redis`, `imap`, `ldap`, `default`).
+    - Add integration tests in `tests/cli_process.rs` verifying CLI validation and dry-run output.
+  - **Acceptance**: CLI accepts, validates, and dry-runs all new protocols.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`
+  - **Verify**: `cargo test`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`.
+
+### Phase 10 Checkpoint
+
+```bash
+cargo test protocols::redis protocols::imap protocols::ldap
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 11: Enterprise Protocol Feasibility (SMB & RDP Track)
+
+**Goal**: Conduct architectural feasibility analysis, packet framing prototypes, and credential exchange validation for SMBv2/v3 (SPNEGO/NTLMSSP) and RDP (X.224, CredSSP, NLA) without heavy external C libraries.
+
+### Tasks
+- [ ] **Task 11.1: SMBv2/v3 Protocol & NTLMSSP Framing Architectural Feasibility**
+  - **Description**: Conduct architectural study and write pure Rust wire prototype for SMBv2/v3 NEGOTIATE dialogue, SPNEGO encapsulation, and NTLMSSP Type 1/2/3 authentication. Document wire structures, state machines, and benchmark against zero-allocation guidelines.
+  - **Acceptance**: Feasibility document and test harness evaluating native SMB authentication without external C dependencies.
+  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`
+
+- [ ] **Task 11.2: RDP / CredSSP / NLA Framing Architectural Feasibility**
+  - **Description**: Conduct architectural study and write pure Rust wire prototype for RDP X.224 connection request, TLS handshake, CredSSP framing, and NLA authentication token exchange.
+  - **Acceptance**: Feasibility document and test harness evaluating native RDP authentication without external C dependencies.
+  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`
+
+### Phase 11 Checkpoint
+
+```bash
+cargo check --all-targets --all-features --locked
+cargo fmt --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -532,6 +688,7 @@ cargo fmt --check
 | **Linting** | Pedantic + Perf with zero warnings | `cargo clippy --all-targets --all-features --locked -- -D warnings` |
 | **Hermetic Tests** | All modules offline on `127.0.0.1:0` | `cargo test` |
 | **Feature Gating** | Build minimal without default features | `cargo check --no-default-features --features http` |
+| **Protocol Gating** | Build individual protocols | `cargo check --no-default-features --features <proto>` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
