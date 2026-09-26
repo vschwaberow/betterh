@@ -573,7 +573,7 @@ cargo fmt --check
 **Goal**: Upgrade existing database and mail protocol implementations to handle modern production cryptographic baselines: SMTP STARTTLS (25/587) and implicit SMTPS (465), MySQL 8+ `caching_sha2_password`, and PostgreSQL 10+ `SCRAM-SHA-256` (RFC 5802 / RFC 7677 SASL).
 
 ### Tasks
-- [ ] **Task 9.1: Shared TLS TransportStream Helper**
+- [x] **Task 9.1: Shared TLS TransportStream Helper**
   - **Description**: Implement `TransportStream` enum (`src/protocols/tls.rs`) wrapping `Plain(TcpStream)` and `Tls(TlsStream<TcpStream>)`. Implement Tokio `AsyncRead`, `AsyncWrite`, and `Unpin`. Provide `wrap_tls(stream, host, insecure)` helper configuring Rustls client with SNI and optional certificate verification bypass for `--insecure`.
   - **Acceptance**: Seamlessly upgrades plain streams to TLS without data loss. Reusable across SMTP, MySQL, IMAP, LDAP.
   - **Files**: `src/protocols/tls.rs`, `src/protocols/mod.rs`

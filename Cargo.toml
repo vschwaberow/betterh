@@ -10,9 +10,10 @@ default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
-smtp = ["dep:base64"]
-mysql = ["dep:sha1"]
-postgres = ["dep:md5"]
+tls = ["dep:tokio-rustls", "dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
+smtp = ["dep:base64", "tls"]
+mysql = ["dep:sha1", "tls"]
+postgres = ["dep:md5", "tls"]
 
 [dependencies]
 # Async Runtime & Concurrency
@@ -56,12 +57,17 @@ russh = { version = "0.63", optional = true }
 base64 = { version = "0.22", optional = true }
 sha1 = { version = "0.10", optional = true }
 md5 = { version = "0.7", optional = true }
+tokio-rustls = { version = "0.26", optional = true }
+rustls = { version = "0.23", optional = true }
+rustls-pki-types = { version = "1", default-features = true, features = ["std"], optional = true }
+webpki-roots = { version = "1", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.6"
 tempfile = "3"
 tokio = { version = "1.43", features = ["test-util"] }
+rcgen = "0.13"
 
 [lints.rust]
 future_incompatible = "warn"
