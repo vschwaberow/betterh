@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- PostgreSQL `SCRAM-SHA-256` SASL authentication (RFC 5802 / RFC 7677)
 - MySQL `caching_sha2_password` fast-cache and RSA-OAEP full authentication
 - SMTP STARTTLS upgrade and implicit SMTPS via shared `TransportStream`
 - Shared TLS `TransportStream` helper (`src/protocols/tls.rs`) with optional certificate bypass for `--insecure`
