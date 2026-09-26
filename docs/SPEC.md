@@ -412,6 +412,10 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
   - **Remaining before a full `ProtocolModule`**: live TLS+CredSSP interop, `pubKeyAuth` channel binding, `TSCredentials` encryption, Extended CredSSP nonce handling, and Kerberos mech alternate — tracked as post-feasibility work.
 - **Prototype location**: `src/feasibility/rdp.rs` (feature = `feasibility-rdp`), hermetic unit tests only (no live RDP server required for Phase 11.2). NTLMv2 crypto reuse is documented against §D.1 (`feasibility-smb`); this crate feature stays independent so default CI can enable either gate alone.
 
+#### E. Post-Expansion Refactoring Track (Phase 14)
+
+After Phases 8–13 grow the protocol surface, Phase 14 consolidates registries (`Service` / `build_module`), shared dial/timeout/line I/O helpers, oversized module splits, and feasibility↔production code sharing. No new `ProtocolModule` methods; structural cleanup only. Spec-first if a shared helper changes a documented contract.
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:
