@@ -378,8 +378,9 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
   - No `libsmbclient` / Samba FFI; optional deps limited to pure-Rust `md4` + existing `md5`/`hmac`.
 - **Go / no-go for production module**:
   - **Go (prototype proven)**: NetBIOS + SMB2 header + NEGOTIATE encode/decode and NTLMSSP Type 1/2/3 framing with NTLMv2 proof are implementable in-tree without C.
-  - **Remaining before a full `ProtocolModule`**: dialect/feature negotiation edge cases (SMB 3.1.1 preauth hash), signing/sealing keys, guest/anonymous paths, and live interoperability fixtures — tracked as post-feasibility work, not MVP.
+  - **Remaining before a full `ProtocolModule`**: dialect/feature negotiation edge cases (SMB 3.1.1 preauth hash), signing/sealing keys, guest/anonymous paths, and live interoperability fixtures — tracked as Phase 13 production work (auth path) plus post-MVP follow-ups where noted.
 - **Prototype location**: `src/feasibility/smb.rs` (feature = `feasibility-smb`), hermetic unit tests only (no live SMB server required for Phase 11.1).
+- **Production track (Phase 13)**: Full `ProtocolModule` at `src/protocols/smb.rs` (Cargo feature `smb`), CLI scheme `smb://` / service `smb`, default port 445. Auth-only path: `NEGOTIATE` → `SESSION_SETUP` with SPNEGO/NTLMSSP NTLMv2 until `STATUS_SUCCESS` or failure. Out of scope for Phase 13: file/share I/O, Kerberos, guest-as-primary, and full SMB 3.1.1 preauth/signing/sealing productization unless required to observe auth success. Feasibility feature remains the offline wire/crypto proof harness (re-export or shared helpers — no duplicated NTLMv2 implementations).
 
 ##### D.2 RDP / CredSSP / NLA (Task 11.2) — Feasibility
 
@@ -786,6 +787,7 @@ betterh/
     │   ├── mysql.rs          # MySQL native wire module (feature = "mysql")
     │   ├── postgres.rs       # PostgreSQL 3.0 wire module (feature = "postgres")
     │   ├── redis.rs          # Redis RESP module (feature = "redis")
+    │   ├── smb.rs            # SMBv2/NTLMSSP NTLMv2 auth module (feature = "smb")
     │   ├── smtp.rs           # SMTP AUTH PLAIN/LOGIN/STARTTLS module (feature = "smtp")
     │   ├── socks.rs          # Shared SOCKS5 dial helper
     │   ├── ssh.rs            # SSH module (feature = "ssh")
