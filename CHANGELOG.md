@@ -30,6 +30,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Changed
 
+- README documents Redis, IMAP/IMAPS, LDAP/LDAPS, updated MySQL/PostgreSQL auth, and Phase 11 feasibility feature flags
 - README documents SMTP/SMTPS, MySQL, and PostgreSQL alongside the original protocols
 - CI checkout Action bumped to `actions/checkout@v7` (#3)
 - Dependency refresh: `indicatif` 0.18, `crossterm` 0.29, `inquire` 0.9, `directories` 6, `toml` 1.1 (#4)

@@ -1,6 +1,6 @@
 # Betterh
 
-Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, and PostgreSQL behind optional Cargo features.
+Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, PostgreSQL, Redis, IMAP/IMAPS, and LDAP/LDAPS behind optional Cargo features.
 
 **Authorized use only.** Use Betterh only on systems you own or are explicitly allowed to test.
 
@@ -31,7 +31,7 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
-Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`).
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`.
 
 ### Examples
 
@@ -55,6 +55,11 @@ betterh smtp 127.0.0.1:587 -u alice -P passwords.txt
 betterh mysql://127.0.0.1:3306 -u root -P passwords.txt --database app
 betterh postgres 127.0.0.1:5432 -u alice -P passwords.txt --database app
 
+# Redis, IMAP, LDAP
+betterh redis 127.0.0.1:6379 -P passwords.txt
+betterh imaps 127.0.0.1:993 -u alice -P passwords.txt --insecure
+betterh ldap://127.0.0.1:389 -u 'cn=alice,dc=example,dc=com' -P passwords.txt
+
 # Completions and man page
 eval "$(betterh completions bash)"
 betterh man > betterh.1
@@ -66,7 +71,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`); MySQL (`mysql_native_password`); PostgreSQL (cleartext / MD5) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
 | Network | SOCKS5 / HTTP proxies, pacing, jitter, adaptive backoff |
@@ -79,6 +84,13 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 cargo fmt --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --all-features --locked
+```
+
+Optional Phase 11 wire prototypes (not production modules):
+
+```bash
+cargo test --features feasibility-smb feasibility::smb
+cargo test --features feasibility-rdp feasibility::rdp
 ```
 
 - Architecture: [`docs/SPEC.md`](docs/SPEC.md)
