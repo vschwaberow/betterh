@@ -674,10 +674,10 @@ cargo fmt --check
   - **Acceptance**: Feasibility document and test harness evaluating native SMB authentication without external C dependencies.
   - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`, `src/feasibility/smb.rs`, `Cargo.toml` (`feasibility-smb`)
 
-- [ ] **Task 11.2: RDP / CredSSP / NLA Framing Architectural Feasibility**
+- [x] **Task 11.2: RDP / CredSSP / NLA Framing Architectural Feasibility**
   - **Description**: Conduct architectural study and write pure Rust wire prototype for RDP X.224 connection request, TLS handshake, CredSSP framing, and NLA authentication token exchange.
   - **Acceptance**: Feasibility document and test harness evaluating native RDP authentication without external C dependencies.
-  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`
+  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`, `src/feasibility/rdp.rs`, `Cargo.toml` (`feasibility-rdp`)
 
 ### Phase 11 Checkpoint
 

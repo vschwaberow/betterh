@@ -18,6 +18,7 @@ redis = []
 imap = ["tls"]
 ldap = ["tls"]
 feasibility-smb = ["dep:md4", "dep:hmac", "dep:md5-hmac"]
+feasibility-rdp = []
 
 [dependencies]
 # Async Runtime & Concurrency

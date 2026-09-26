@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- RDP/CredSSP feasibility prototype (`feasibility-rdp`) and SPEC §5.2.D.2 wire analysis
 - SMBv2/NTLMSSP feasibility prototype (`feasibility-smb`) and SPEC §5.2.D.1 wire analysis
 - CLI schemes and dry-run wiring for `redis`, `imap`/`imaps`, and `ldap`/`ldaps`
 - LDAP/LDAPS Simple Bind (RFC 4511 BER) with implicit TLS on port 636
