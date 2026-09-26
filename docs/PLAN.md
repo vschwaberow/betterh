@@ -435,6 +435,12 @@ cargo fmt --check
   - **Files**: `LICENSE-MIT`, `LICENSE-APACHE`, `README.md`, `docs/SPEC.md` (project tree), this PLAN entry
   - **Verify**: Files match the SPDX identifiers used in source headers.
 
+- [x] **Task 7.5: Dependabot Configuration**
+  - **Description**: Add `.github/dependabot.yml` for weekly `cargo` and `github-actions` updates so dependency and Actions bumps arrive as reviewable PRs.
+  - **Acceptance**: Dependabot config is valid; ecosystems cover Cargo.lock and workflow Actions.
+  - **Files**: `.github/dependabot.yml`, `docs/SPEC.md` §17, this PLAN entry
+  - **Verify**: File review against GitHub Dependabot schema; CI remains green.
+
 ## Verification Matrix
 
 | Area | Check | Command |
