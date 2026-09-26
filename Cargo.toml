@@ -1,0 +1,74 @@
+[package]
+name = "betterh"
+version = "0.1.0"
+edition = "2024"
+description = "A modern, high-performance, memory-safe network authentication auditor written in Rust"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["ftp", "http", "ssh"]
+ftp = []
+http = ["dep:reqwest"]
+ssh = ["dep:russh"]
+
+[dependencies]
+# Async Runtime & Concurrency
+tokio = { version = "1.43", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Networking, Addressing & Proxies
+ipnet = "2.10"
+tokio-socks = "0.5"
+url = "2.5"
+percent-encoding = "2.3"
+uuid = { version = "1", features = ["v4"] }
+fastrand = "2.3"
+
+# CLI, Interactive UI & Terminal
+clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+clap_mangen = "0.2"
+indicatif = "0.17"
+console = "0.15"
+crossterm = { version = "0.28", features = ["event-stream"] }
+inquire = "0.7"
+directories = "5.0"
+toml = "0.8"
+
+# Error Handling & Observability
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Optional Protocol Crates (Feature-Gated)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "socks"], optional = true }
+russh = { version = "0.63", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.6"
+tempfile = "3"
+tokio = { version = "1.43", features = ["test-util"] }
+
+[lints.rust]
+future_incompatible = "warn"
+nonstandard_style = "deny"
+rust_2024_compatibility = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = 10 }
+redundant_clone = { level = "deny", priority = 9 }
+needless_borrow = { level = "deny", priority = 8 }
+needless_collect = { level = "deny", priority = 7 }
+clone_on_copy = { level = "deny", priority = 6 }
+large_enum_variant = { level = "deny", priority = 5 }
+manual_while_let_some = { level = "deny", priority = 4 }
+pedantic = { level = "warn", priority = 3 }
+perf = { level = "warn", priority = 2 }
