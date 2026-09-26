@@ -585,7 +585,7 @@ cargo fmt --check
   - **Files**: `src/protocols/smtp.rs`
   - **Verify**: Mock tests for STARTTLS handshake, implicit SMTPS, and rejection codes.
 
-- [ ] **Task 9.3: MySQL `caching_sha2_password` Authentication**
+- [x] **Task 9.3: MySQL `caching_sha2_password` Authentication**
   - **Description**: Add `caching_sha2_password` auth plugin handling using `sha2`. Compute SHA-256 double-hash scramble:
     $$\text{scramble} = \text{SHA256}(\text{password}) \oplus \text{SHA256}(\text{SHA256}(\text{SHA256}(\text{password})) \parallel \text{salt})$$
     Handle `0x00` OK (fast cache hit), `0x01, 0x03` (cache miss requiring full authentication over TLS or RSA-OAEP public key encryption), and `0xFF` ERR.

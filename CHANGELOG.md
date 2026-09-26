@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- MySQL `caching_sha2_password` fast-cache and RSA-OAEP full authentication
 - SMTP STARTTLS upgrade and implicit SMTPS via shared `TransportStream`
 - Shared TLS `TransportStream` helper (`src/protocols/tls.rs`) with optional certificate bypass for `--insecure`
 - Extended protocols: native wire-level implementations for SMTP (RFC 5321, `AUTH PLAIN`/`LOGIN`), MySQL (`HandshakeV10`, `mysql_native_password` SHA-1 scramble), and PostgreSQL (Frontend/Backend Protocol 3.0, cleartext and salted MD5 challenges)
