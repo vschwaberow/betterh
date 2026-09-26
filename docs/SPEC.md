@@ -551,6 +551,7 @@ betterh/
 ├── README.md                 # Quickstart, build, authorized-use notice
 ├── AGENTS.md                 # Agent guidelines, rules, and workflows
 ├── .github/
+│   ├── dependabot.yml        # Weekly cargo + Actions update PRs
 │   └── workflows/
 │       └── ci.yml            # fmt / clippy / test / feature-gate CI
 ├── docs/
@@ -767,3 +768,5 @@ Pull requests and pushes to `master` run a GitHub Actions workflow (`.github/wor
 4. `cargo check --no-default-features --features http --locked` (feature-gating smoke)
 
 The workflow uses the latest stable Rust toolchain with `rustfmt` and `clippy` components and caches Cargo artifacts for speed. It must remain hermetic: no network services beyond crates.io.
+
+Dependency and GitHub Actions updates are proposed weekly by Dependabot (`.github/dependabot.yml`) as pull requests against `master`.
