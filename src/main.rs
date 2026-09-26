@@ -31,6 +31,13 @@ async fn main() -> Result<()> {
             generate_manpage(&Cli::command(), &mut std::io::stdout())?;
             return Ok(());
         }
+        #[cfg(feature = "mcp")]
+        Some(Command::Mcp { stdio }) => {
+            if !stdio {
+                bail!("Only the stdio MCP transport is supported; pass --stdio");
+            }
+            return run_mcp_server().await;
+        }
         None if cli.interactive => return run_wizard(),
         None => {}
     }
@@ -118,4 +125,25 @@ fn run_wizard() -> Result<()> {
     let plan = run_interactive().context("Interactive wizard failed")?;
     eprintln!("{}", plan.ready_message());
     Ok(())
+}
+
+#[cfg(feature = "mcp")]
+async fn run_mcp_server() -> Result<()> {
+    use betterh::mcp::{McpError, run_stdio_server};
+
+    let cancel = CancellationToken::new();
+    let ctrl = cancel.clone();
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        ctrl.cancel();
+    });
+
+    match run_stdio_server(&cancel).await {
+        Ok(()) => Ok(()),
+        Err(McpError::Cancelled) => {
+            eprintln!("MCP server cancelled.");
+            std::process::exit(130);
+        }
+        Err(err) => Err(err).context("MCP server failed"),
+    }
 }

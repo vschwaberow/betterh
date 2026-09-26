@@ -118,6 +118,7 @@ fn completions_bash_lists_core_subcommands() {
     let stdout = String::from_utf8(result.stdout).unwrap();
     assert!(stdout.contains("wizard"));
     assert!(stdout.contains("completions"));
+    assert!(stdout.contains("mcp"));
     assert!(stdout.contains("man"));
 }
 
