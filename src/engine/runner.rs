@@ -376,7 +376,9 @@ fn build_module(
         }
         #[cfg(feature = "smtp")]
         Service::Smtp | Service::Smtps => Ok(Arc::new(
-            crate::protocols::SmtpModule::new().with_proxy(proxy),
+            crate::protocols::SmtpModule::new()
+                .with_proxy(proxy)
+                .with_insecure(cli.module.insecure),
         )),
         #[cfg(feature = "mysql")]
         Service::Mysql => Ok(Arc::new(

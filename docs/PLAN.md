@@ -579,7 +579,7 @@ cargo fmt --check
   - **Files**: `src/protocols/tls.rs`, `src/protocols/mod.rs`
   - **Verify**: Unit tests verifying TLS wrap and plain pass-through.
 
-- [ ] **Task 9.2: SMTP STARTTLS & Implicit SMTPS Upgrade**
+- [x] **Task 9.2: SMTP STARTTLS & Implicit SMTPS Upgrade**
   - **Description**: Add STARTTLS detection from `250-STARTTLS` in `EHLO` response on ports 25 and 587. Send `STARTTLS\r\n`, verify `220` response, upgrade via `TransportStream`, and repeat `EHLO`. For port 465 (implicit TLS) or `target.ssl`, wrap stream immediately on connect before reading initial 220 banner. Respect `--insecure`.
   - **Acceptance**: Successfully performs STARTTLS upgrade and authenticates against mock SMTP server.
   - **Files**: `src/protocols/smtp.rs`
