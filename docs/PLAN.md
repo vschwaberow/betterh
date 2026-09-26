@@ -627,7 +627,7 @@ cargo fmt --check
   - **Files**: `src/protocols/imap.rs`, `src/protocols/mod.rs`
   - **Verify**: Hermetic mock tests in `src/protocols/imap.rs`.
 
-- [ ] **Task 10.3: LDAP/LDAPS Protocol Module & Mock Harness**
+- [x] **Task 10.3: LDAP/LDAPS Protocol Module & Mock Harness**
   - **Description**: Implement `LdapModule` (feature = `ldap`, dependency = `tokio-rustls`) supporting ports 389 (plain) and 636 (implicit LDAPS). Encode ASN.1 BER `BindRequest` with MessageID, LDAP version 3, Name/DN, and Simple Password. Decode `BindResponse`: map resultCode 0 to Success, 49 to Failure, 53 to LockedOut, 51 to RateLimited. SOCKS5 proxy support.
   - **Acceptance**: Completes Simple Bind against mock LDAP server and handles result codes correctly.
   - **Files**: `src/protocols/ldap.rs`, `src/protocols/mod.rs`
