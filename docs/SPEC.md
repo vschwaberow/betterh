@@ -546,6 +546,7 @@ betterh man > /usr/share/man/man1/betterh.1
 ```
 betterh/
 ├── Cargo.toml
+├── CHANGELOG.md              # Keep a Changelog / SemVer release notes
 ├── LICENSE-MIT               # MIT license text
 ├── LICENSE-APACHE            # Apache-2.0 license text
 ├── README.md                 # Quickstart, build, authorized-use notice
@@ -770,3 +771,5 @@ Pull requests and pushes to `master` run a GitHub Actions workflow (`.github/wor
 The workflow uses the latest stable Rust toolchain with `rustfmt` and `clippy` components and caches Cargo artifacts for speed. It must remain hermetic: no network services beyond crates.io.
 
 Dependency and GitHub Actions updates are proposed weekly by Dependabot (`.github/dependabot.yml`) as pull requests against `master`.
+
+User-visible changes ship with an entry in root `CHANGELOG.md` (Keep a Changelog sections: Added / Changed / Fixed / Removed / Security). Pull requests that alter operator-facing behavior or public docs must update that file in the same change set.

@@ -76,6 +76,7 @@ cargo test --all-features --locked
 
 - Architecture: [`docs/SPEC.md`](docs/SPEC.md)
 - Roadmap: [`docs/PLAN.md`](docs/PLAN.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Agent rules: [`AGENTS.md`](AGENTS.md)
 
 ## License
