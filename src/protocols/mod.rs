@@ -9,7 +9,8 @@ pub mod mock;
     feature = "ssh",
     feature = "smtp",
     feature = "mysql",
-    feature = "postgres"
+    feature = "postgres",
+    feature = "redis"
 ))]
 pub mod socks;
 pub mod types;
@@ -34,6 +35,9 @@ pub mod mysql;
 
 #[cfg(feature = "postgres")]
 pub mod postgres;
+
+#[cfg(feature = "redis")]
+pub mod redis;
 
 use std::time::Duration;
 
@@ -110,3 +114,6 @@ pub use mysql::MysqlModule;
 
 #[cfg(feature = "postgres")]
 pub use postgres::PostgresModule;
+
+#[cfg(feature = "redis")]
+pub use redis::RedisModule;

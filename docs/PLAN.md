@@ -615,7 +615,7 @@ cargo fmt --check
 **Goal**: Implement native wire-level authentication testing for ubiquitous enterprise infrastructure services: Redis (RESP inline & ACL), IMAP/IMAPS (RFC 3501 tagged dialogue & STARTTLS), and LDAP/LDAPS (RFC 4511 Simple Bind via ASN.1 BER).
 
 ### Tasks
-- [ ] **Task 10.1: Redis Protocol Module & Mock Harness**
+- [x] **Task 10.1: Redis Protocol Module & Mock Harness**
   - **Description**: Implement `RedisModule` (feature = `redis`) supporting RESP protocol on port 6379. Pre-flight probe with `PING\r\n`. Authenticate via `AUTH <password>\r\n` (inline) or `AUTH <username> <password>\r\n` (ACL). Map `+OK` to Success, `-WRONGPASS` / `-ERR invalid` to Failure, and connection errors / max clients to RateLimited(5s). SOCKS5 proxy support.
   - **Acceptance**: Authenticates against mock RESP server for both inline and ACL auth.
   - **Files**: `src/protocols/redis.rs`, `src/protocols/mod.rs`
