@@ -115,6 +115,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 13.2 NTLMSSP Type 1/2/3 + NTLMv2 proof & NTSTATUS mapping       |
 |  - 13.3 Minimal SPNEGO wrap, SOCKS5, timeout-friendly I/O         |
 |  - 13.4 CLI smb:// wiring, hermetic mocks, README / CHANGELOG     |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 14: Post-Expansion Refactoring & Deduplication            |
+|  - 14.1 Protocol registry / CLI Service / build_module coalesce   |
+|  - 14.2 Shared dial, timeout, and line/framed I/O helpers         |
+|  - 14.3 Split oversized modules; retire clippy expect debt        |
+|  - 14.4 Feasibility↔production share; SPEC/README sync            |
 +-------------------------------------------------------------------+
 ```
 
@@ -791,6 +800,45 @@ cargo fmt --check
 
 ```bash
 cargo test protocols::smb
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 14: Post-Expansion Refactoring & Deduplication
+
+**Goal**: After the protocol expansion (Phases 8–13), systematically remove duplication and structural debt from many near-parallel modules—without speculative abstractions. Prefer extracting only helpers used ≥2 times; keep Apollo/Tokio rules (borrow over clone, no locks across await, bounded spawning). Phase 6 covered the early core; Phase 14 targets post-SMTP/DB/infra/enterprise growth. May run interleaved with Phase 12/13 implementation as modules land.
+
+### Tasks
+- [ ] **Task 14.1: Protocol Registry, CLI `Service`, and `build_module` Coalesce**
+  - **Description**: Collapse repeated service↔module wiring across `src/cli.rs` (`Service` enum, scheme parse, default ports, SSL/insecure gates) and `src/engine/runner.rs` (`build_module`, feature gates). Introduce a single declarative registry (const table or small match helpers) so adding a protocol touches one place. Remove or shrink `#[expect(clippy::too_many_lines)]` on `build_module` by splitting construction, not by silencing.
+  - **Acceptance**: New protocol registration is mechanical (one registry entry + module file); `build_module` / service parse stay under Clippy line limits without broad allows; all existing CLI dry-run and scheme tests pass.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `src/protocols/mod.rs`
+  - **Verify**: `cargo test --test cli_process`, `cargo clippy --all-targets --all-features --locked -- -D warnings`
+
+- [ ] **Task 14.2: Shared Dial, Timeout, and Line/Framed I/O Helpers**
+  - **Description**: Deduplicate connect/proxy/timeout patterns shared by SMTP, IMAP, LDAP, Redis, MySQL, PostgreSQL (and SMB once present): SOCKS-or-direct dial, `tokio::time::timeout` wrappers, CRLF line readers, and “read until predicate” loops. Extend or complement `socks.rs` / `tls.rs` with minimal helpers in `src/protocols/` (e.g. `io.rs`)—no new dependency, no god-object session type.
+  - **Acceptance**: At least the repeated dial+timeout and line-read paths call shared helpers; protocol behavior unchanged (hermetic mocks still green); no std blocking I/O introduced.
+  - **Files**: `src/protocols/io.rs` (new, if needed), `src/protocols/socks.rs`, `src/protocols/tls.rs`, `src/protocols/{smtp,imap,ldap,redis,mysql,postgres}.rs`
+  - **Verify**: `cargo test protocols::`, `cargo clippy --all-targets --all-features --locked -- -D warnings`
+
+- [ ] **Task 14.3: Split Oversized Modules & Retire Clippy Expect Debt**
+  - **Description**: Split the largest protocol/CLI files where cohesion allows (notably `mysql.rs`, `postgres.rs`, and dense sections of `cli.rs`) into focused private submodules (framing vs auth vs tests) without changing public API. Audit `#[expect(clippy::…)]` / documented allows; remove obsolete suppressions; keep only expects with a rationale comment that still holds.
+  - **Acceptance**: No module that can be cleanly split remains >~800 LOC without a documented reason; clippy `-D warnings` clean with fewer expects than before Phase 14; public `ProtocolModule` surface unchanged.
+  - **Files**: `src/protocols/mysql.rs`, `src/protocols/postgres.rs`, `src/cli.rs`, related `mod.rs` wiring
+  - **Verify**: `cargo test`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`
+
+- [ ] **Task 14.4: Feasibility↔Production Share Paths & Docs Sync**
+  - **Description**: Ensure Phase 11 feasibility codecs (`src/feasibility/smb.rs`, later RDP) and production modules (`src/protocols/smb.rs`) do not duplicate NTLMv2/wire crypto—shared helpers or thin re-exports only. Sync `docs/SPEC.md` directory tree / module boundaries and README capability wording with the refactored layout; CHANGELOG entry for user-visible structural notes only if CLI/docs change.
+  - **Acceptance**: One implementation of each crypto/framing primitive; SPEC tree matches `src/`; `feasibility-*` tests still pass alongside `protocols::smb` when both features are enabled.
+  - **Files**: `src/feasibility/*`, `src/protocols/smb.rs` (when present), `docs/SPEC.md`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test --all-features --locked`, `cargo fmt --check`
+
+### Phase 14 Checkpoint
+
+```bash
 cargo test --all-targets --all-features --locked
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt --check
