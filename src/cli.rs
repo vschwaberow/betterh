@@ -25,6 +25,10 @@ pub enum Service {
     Ssh,
     Http,
     Https,
+    Smtp,
+    Smtps,
+    Mysql,
+    Postgres,
 }
 
 impl Service {
@@ -35,11 +39,19 @@ impl Service {
             Self::Ssh => 22,
             Self::Http => 80,
             Self::Https => 443,
+            Self::Smtp => 25,
+            Self::Smtps => 465,
+            Self::Mysql => 3306,
+            Self::Postgres => 5432,
         }
     }
 
     const fn is_http(self) -> bool {
         matches!(self, Self::Http | Self::Https)
+    }
+
+    const fn is_database(self) -> bool {
+        matches!(self, Self::Mysql | Self::Postgres)
     }
 }
 
@@ -106,6 +118,9 @@ pub struct ModuleOptions {
     pub ssh_key: Option<PathBuf>,
     #[arg(long)]
     pub ftp_passive: bool,
+    /// Database name (`MySQL`, `PostgreSQL`).
+    #[arg(long)]
+    pub database: Option<String>,
     /// Skip TLS certificate validation.
     #[arg(short = 'k', long)]
     pub insecure: bool,
@@ -301,6 +316,9 @@ impl Cli {
         if module.ftp_passive && service != Service::Ftp {
             return Err(invalid("--ftp-passive requires an ftp target"));
         }
+        if module.database.is_some() && !service.is_database() {
+            return Err(invalid("--database requires a mysql or postgres target"));
+        }
         Ok(())
     }
 
@@ -322,7 +340,19 @@ fn invalid(message: &str) -> clap::Error {
 }
 
 fn parse_service(value: &str) -> Result<Service, clap::Error> {
-    Service::from_str(value, true).map_err(|_| invalid("Supported services: ftp, ssh, http, https"))
+    match value.to_ascii_lowercase().as_str() {
+        "ftp" => Ok(Service::Ftp),
+        "ssh" => Ok(Service::Ssh),
+        "http" => Ok(Service::Http),
+        "https" => Ok(Service::Https),
+        "smtp" => Ok(Service::Smtp),
+        "smtps" => Ok(Service::Smtps),
+        "mysql" => Ok(Service::Mysql),
+        "postgres" | "postgresql" => Ok(Service::Postgres),
+        _ => Err(invalid(
+            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql)",
+        )),
+    }
 }
 
 pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
@@ -371,7 +401,7 @@ pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
         source: TargetSource::Single(Target {
             host,
             port,
-            ssl: service == Service::Https,
+            ssl: service == Service::Https || service == Service::Smtps,
             path,
             ip,
         }),
@@ -389,6 +419,10 @@ pub(crate) fn parse_positional(service: Service, value: &str) -> Result<TargetSo
         Service::Ssh => "ssh",
         Service::Http => "http",
         Service::Https => "https",
+        Service::Smtp => "smtp",
+        Service::Smtps => "smtps",
+        Service::Mysql => "mysql",
+        Service::Postgres => "postgres",
     };
     Ok(parse_url(&format!("{scheme}://{host}"))?.source)
 }
@@ -492,7 +526,17 @@ mod tests {
 
     #[test]
     fn service_defaults_and_ipv6_are_normalized() {
-        for (service, port) in [("ftp", 21), ("ssh", 22), ("http", 80), ("https", 443)] {
+        for (service, port) in [
+            ("ftp", 21),
+            ("ssh", 22),
+            ("http", 80),
+            ("https", 443),
+            ("smtp", 25),
+            ("smtps", 465),
+            ("mysql", 3306),
+            ("postgres", 5432),
+            ("postgresql", 5432),
+        ] {
             let TargetSource::Single(target) = input(&["betterh", service, "::1"]).source else {
                 panic!()
             };
@@ -590,11 +634,12 @@ mod tests {
             vec!["ssh://localhost:0"],
             vec!["ssh://localhost:99999"],
             vec!["ssh://"],
-            vec!["smtp", "localhost"],
+            vec!["telnet", "localhost"],
             vec!["ssh", "192.168.1.0/33"],
             vec!["ssh", "localhost", "--body", "test"],
             vec!["https://localhost", "--ssh-key", "key"],
             vec!["ssh://localhost", "--ftp-passive"],
+            vec!["ssh", "localhost", "--database", "test"],
             vec!["ssh://localhost", "extra"],
             vec!["ssh://localhost", "-M", "targets"],
         ] {

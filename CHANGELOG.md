@@ -11,6 +11,8 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- Extended protocols: native wire-level implementations for SMTP (RFC 5321, `AUTH PLAIN`/`LOGIN`), MySQL (`HandshakeV10`, `mysql_native_password` SHA-1 scramble), and PostgreSQL (Frontend/Backend Protocol 3.0, cleartext and salted MD5 challenges)
+- CLI support for `smtp`, `smtps`, `mysql`, `postgres`, and `postgresql` service schemes with `--database` option and SOCKS5 proxy tunneling
 - Project changelog (`CHANGELOG.md`, Keep a Changelog) (#5)
 - Dual-license text files (`LICENSE-MIT`, `LICENSE-APACHE`) (#1)
 - Weekly Dependabot updates for Cargo and GitHub Actions (`.github/dependabot.yml`) (#2)

@@ -4,7 +4,13 @@
 //! Authentication contract shared by native protocol modules.
 
 pub mod mock;
-#[cfg(any(feature = "ftp", feature = "ssh"))]
+#[cfg(any(
+    feature = "ftp",
+    feature = "ssh",
+    feature = "smtp",
+    feature = "mysql",
+    feature = "postgres"
+))]
 pub mod socks;
 pub mod types;
 
@@ -16,6 +22,15 @@ pub mod http;
 
 #[cfg(feature = "ssh")]
 pub mod ssh;
+
+#[cfg(feature = "smtp")]
+pub mod smtp;
+
+#[cfg(feature = "mysql")]
+pub mod mysql;
+
+#[cfg(feature = "postgres")]
+pub mod postgres;
 
 use std::time::Duration;
 
@@ -80,3 +95,12 @@ pub use http::{HttpAuthMode, HttpModule, HttpOptions};
 
 #[cfg(feature = "ssh")]
 pub use ssh::SshModule;
+
+#[cfg(feature = "smtp")]
+pub use smtp::SmtpModule;
+
+#[cfg(feature = "mysql")]
+pub use mysql::MysqlModule;
+
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresModule;

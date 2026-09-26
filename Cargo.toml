@@ -6,10 +6,13 @@ description = "A modern, high-performance, memory-safe network authentication au
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["ftp", "http", "ssh"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
+smtp = ["dep:base64"]
+mysql = ["dep:sha1"]
+postgres = ["dep:md5"]
 
 [dependencies]
 # Async Runtime & Concurrency
@@ -50,6 +53,9 @@ serde_json = "1.0"
 # Optional Protocol Crates (Feature-Gated)
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "socks"], optional = true }
 russh = { version = "0.63", optional = true }
+base64 = { version = "0.22", optional = true }
+sha1 = { version = "0.10", optional = true }
+md5 = { version = "0.7", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

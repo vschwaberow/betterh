@@ -485,3 +485,57 @@ fn dry_run_reports_nonlocal_probe_as_skipped_in_text_and_json() {
         }
     }
 }
+
+#[test]
+fn dry_run_extended_protocols_validate_and_estimate_work() {
+    for service in ["smtp", "smtps", "mysql", "postgres", "postgresql"] {
+        let mut args = vec![
+            service,
+            "127.0.0.1",
+            "-u",
+            "audit",
+            "-p",
+            "secret",
+            "--dry-run",
+            "--format",
+            "jsonl",
+        ];
+        if service == "mysql" || service == "postgres" {
+            args.extend(["--database", "appdb"]);
+        }
+        let result = run(&args, &[]);
+        assert!(
+            result.status.success(),
+            "dry-run for {service} failed: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(report["targets"], 1);
+        assert_eq!(report["combinations"], 1);
+    }
+}
+
+#[test]
+fn database_flag_rejected_on_non_database_services() {
+    for service in ["ssh", "ftp", "http", "smtp"] {
+        let result = run(
+            &[
+                service,
+                "127.0.0.1",
+                "-u",
+                "test",
+                "-p",
+                "pass",
+                "--database",
+                "mydb",
+            ],
+            &[],
+        );
+        assert!(!result.status.success());
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(
+            stderr.contains("--database requires a mysql or postgres target"),
+            "unexpected error for {service}: {stderr}"
+        );
+    }
+}

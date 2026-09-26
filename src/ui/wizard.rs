@@ -15,6 +15,9 @@ pub enum WizardService {
     Ssh,
     Http,
     Https,
+    Smtp,
+    Mysql,
+    Postgres,
 }
 
 impl WizardService {
@@ -25,6 +28,9 @@ impl WizardService {
             Self::Ssh => "ssh",
             Self::Http => "http",
             Self::Https => "https",
+            Self::Smtp => "smtp",
+            Self::Mysql => "mysql",
+            Self::Postgres => "postgres",
         }
     }
 }
@@ -150,6 +156,9 @@ pub fn run_interactive() -> Result<WizardPlan, WizardError> {
             WizardService::Ssh,
             WizardService::Http,
             WizardService::Https,
+            WizardService::Smtp,
+            WizardService::Mysql,
+            WizardService::Postgres,
         ],
     )
     .prompt()?;

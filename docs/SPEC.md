@@ -58,10 +58,13 @@
 ### Protocol Feature Flags
 ```toml
 [features]
-default = ["ftp", "http", "ssh"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
+smtp = ["dep:base64"]
+mysql = ["dep:sha1"]
+postgres = ["dep:md5"]
 ```
 
 ### Dev Dependencies (Hermetic Testing)
@@ -116,7 +119,7 @@ ssh = ["dep:russh"]
                 |                        |                        |
                 v                        v                        v
        +------------------+     +------------------+     +------------------+
-       |    SshModule     |     |    HttpModule    |     |    FtpModule     |
+       |  SSH / FTP / HTTP|     |   SMTP / SMTPS   |     | MySQL / Postgres |
        +------------------+     +------------------+     +------------------+
                 |                        |                        |
                 +------------------------+------------------------+
@@ -243,6 +246,44 @@ pub trait ProtocolModule: Send + Sync {
 - `Credential` debug output redacts the password. Explicit serialization preserves it for checkpoint and reporting use.
 - The mock uses a deterministic success percentage (0–100), configurable latency, an optional rate-limit response, and a catch-all mode. Rate limits take precedence over success. Latency must respect the authentication timeout.
 - The default canary accepts only `Failure` as evidence of normal authentication. Lockouts, rate limits, and module error results produce an inconclusive-probe error; transport errors propagate.
+
+### 5.2 Protocol Specifications (Core & Extended)
+
+#### A. Core Protocols
+- **FTP (`FtpModule`, feature = `ftp`)**:
+  - RFC 959 raw TCP over Tokio with type-state connection management (`Disconnected` $\to$ `Connected` $\to$ `Ready`).
+  - `USER` and `PASS` dialogue; tolerant multi-line code-dash continuations.
+- **HTTP / HTTPS (`HttpModule`, feature = `http`)**:
+  - `reqwest` async client with Keep-Alive connection reuse across attempts.
+  - Supports Basic auth, Form URL-encoded / JSON POST with `{USER}` and `{PASS}` markers, and Bearer token auth.
+- **SSH (`SshModule`, feature = `ssh`)**:
+  - `russh` client authentication; supports password and public key authentication.
+
+#### B. Extended Protocols (Phase 8)
+- **SMTP / SMTPS (`SmtpModule`, feature = `smtp`)**:
+  - Default ports: `25` (plain / STARTTLS), `587` (submission), `465` (implicit SMTPS).
+  - Type-state connection (`SmtpClient<Disconnected>` $\to$ `Connected` $\to$ `Greeted`).
+  - Greets with `EHLO betterh.local`, inspects `250-AUTH` extensions, and executes `AUTH PLAIN` (preferred single-step) or `AUTH LOGIN` (dual 334 challenge-response).
+  - Maps 235 to `AuthResult::Success`, 535 to `AuthResult::Failure`, 421/454 to `AuthResult::RateLimited(5s)`, 550 to `AuthResult::LockedOut`.
+- **MySQL (`MysqlModule`, feature = `mysql`)**:
+  - Default port: `3306`.
+  - Native wire-level implementation of the MySQL Client/Server protocol without external C-bindings or heavy SQL drivers.
+  - Parses `HandshakeV10` greeting: extracts protocol version (`0x0a`), server version, connection ID, 8-byte auth-plugin-data part 1, capabilities, and auth-plugin-data part 2 (salt).
+  - Builds `HandshakeResponse41`: encodes client flags, maximum packet size, utf8mb4 collation (`45`), username, and computes `mysql_native_password` scramble:
+    $$\text{scramble} = \text{SHA1}(\text{password}) \oplus \text{SHA1}(\text{salt} \parallel \text{SHA1}(\text{SHA1}(\text{password})))$$
+  - Decodes response: `0x00` OK packet $\to$ `AuthResult::Success`; `0xFF` ERR packet code 1045 $\to$ `AuthResult::Failure`; code 1129 (host blocked) or 1040 (too many connections) $\to$ `AuthResult::RateLimited`.
+- **PostgreSQL (`PostgresModule`, feature = `postgres`)**:
+  - Default port: `5432`.
+  - Native wire-level implementation of PostgreSQL Frontend/Backend Protocol 3.0 (`196608`).
+  - Encodes `StartupMessage`: length prefix + protocol version `196608` + null-terminated key-value pairs (`user`, `<username>`, `database`, `<database>`).
+  - Decodes `'R'` Authentication Request messages:
+    - Type `0` (`AuthenticationOk`) $\to$ `AuthResult::Success`.
+    - Type `3` (`AuthenticationCleartextPassword`) $\to$ sends `'p'` message with cleartext password.
+    - Type `5` (`AuthenticationMD5Password`) with 4-byte salt $\to$ computes:
+      $$\text{hash}_1 = \text{hex}(\text{MD5}(\text{password} \parallel \text{username}))$$
+      $$\text{hash}_2 = \text{hex}(\text{MD5}(\text{hash}_1 \parallel \text{salt}))$$
+      Sends `'p'` message with `"md5"` prefix followed by $\text{hash}_2$.
+  - Decodes `'E'` ErrorResponse: parses SQLSTATE fields; `28P01` / `28000` $\to$ `AuthResult::Failure`; `53300` (too many connections) $\to$ `AuthResult::RateLimited(5s)`.
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
@@ -406,6 +447,9 @@ impl ProtocolClient<Connected> {
   - **FTP**: Parse multi-line banners (RFC 959 code-dash continuations) tolerantly; accept both CRLF and bare LF delimiters; gracefully consume preliminary informational messages before authenticating.
   - **HTTP**: Leniently handle non-standard status lines, absent `Content-Length` headers on rejection responses, and HTTP/1.0 fallbacks.
   - **SSH**: Support broad negotiation across standard cryptographic algorithms without disconnecting on unexpected identification string formatting.
+  - **SMTP**: Parse RFC 5321 multiline reply continuations (`250-` followed by `250 ` termination); accept bare LF delimiters from legacy embedded servers; tolerate arbitrary extension announcements; support both single-step `AUTH PLAIN` and two-step `AUTH LOGIN`.
+  - **MySQL**: Read packet framing (3-byte length + sequence ID); consume HandshakeV10 auth data splits; handle MySQL 5.x and 8.x error codes (1045 access denied, 1129 host blocked, 1040 connection limit).
+  - **PostgreSQL**: Frame Protocol 3.0 messages; negotiate cleartext and MD5 salted challenges; parse ErrorResponse SQLSTATE fields (`28P01`, `28000`, `53300`).
   - **Transport Resilience**: Distinguish transient transport resets from explicit protocol rejections; never drop connection state on transient TCP resets without attempting recovery.
 
 ---
@@ -520,7 +564,7 @@ wordlist_paths = ["/usr/share/wordlists/rockyou.txt"]
 #### Foundation Parsing and Configuration Rules
 
 - The CLI entrypoint (`main.rs`) validates invocations, runs `--dry-run` audits, and dispatches live attacks through `engine::runner` (scope → canary → `prepare_target` → brute/spray pool → session reporter). Wizard/completions/man remain non-attack paths: the wizard only prints the equivalent CLI argv and confirms that no authentication attempts were sent.
-- Services are `ftp`, `ssh`, `http`, and `https`; HTTP authentication selects `-m basic`, `-m post-form`, or `-m bearer` (default `basic`). Cargo protocol features control later implementations, not parsing.
+- Services are `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, and `postgres` (or `postgresql`); HTTP authentication selects `-m basic`, `-m post-form`, or `-m bearer` (default `basic`). Cargo protocol features control implementations, not parsing. Default ports are FTP (21), SSH (22), HTTP (80), HTTPS (443), SMTP (25), SMTPS (465), MySQL (3306), and PostgreSQL (5432).
 - URL usernames are percent-decoded. `-u` overrides the embedded user; `-L` replaces it with a list. Embedded passwords and URL fragments are rejected. HTTP paths retain the query string. IPv6 positional addresses require brackets when a port is supplied.
 - `-C` accepts a combo list and conflicts with separate username/password sources. Both lists cannot consume stdin simultaneously. CIDR expansion and target-file reading belong to Phase 3.
 - Duration flags accept whole numbers with `ms`, `s`, `m`, or `h` suffixes. Concurrency, timeout, and request interval must be positive.
@@ -585,6 +629,9 @@ betterh/
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests
     │   ├── ftp.rs            # FTP raw TCP module (feature = "ftp")
     │   ├── http.rs           # HTTP module (feature = "http")
+    │   ├── mysql.rs          # MySQL native wire module (feature = "mysql")
+    │   ├── postgres.rs       # PostgreSQL 3.0 wire module (feature = "postgres")
+    │   ├── smtp.rs           # SMTP AUTH PLAIN/LOGIN module (feature = "smtp")
     │   ├── socks.rs          # Shared SOCKS5 dial helper
     │   └── ssh.rs            # SSH module (feature = "ssh")
     ├── report/               # Reporting & formatters

@@ -447,6 +447,83 @@ cargo fmt --check
   - **Files**: `CHANGELOG.md`, `README.md`, `docs/SPEC.md`, this PLAN entry
   - **Verify**: Manual review that merged history appears under `[Unreleased]` only (no premature version section).
 
+---
+
+## Phase 8: Extended Protocols — SMTP, MySQL, and PostgreSQL
+
+**Goal**: Expand protocol coverage to enterprise database and mail services with native wire-level implementations, zero-allocation credential handling, robust error mapping, and hermetic in-process test harnesses.
+
+### Tasks
+- [x] **Task 8.1: SMTP Protocol Module & In-Process Test Harness**
+  - **Description**: Implement `SmtpModule` (feature = `smtp`, dependency = `base64`) supporting:
+    - Default ports: 25 (SMTP/STARTTLS), 587 (Submission), 465 (SMTPS).
+    - Type-state connection management (`SmtpClient<Disconnected>` $\to$ `Connected` $\to$ `Greeted`).
+    - Handshake greeting (`EHLO betterh.local`) and extension detection from `250-AUTH`.
+    - Authentication mechanisms: `AUTH PLAIN` (preferred single-step) and `AUTH LOGIN` (two-step 334 challenge-response).
+    - Resilient multiline reply parsing with bare LF and code-dash continuation tolerances.
+    - SOCKS5 proxy support.
+  - **Acceptance**: Correctly authenticates credentials against local mock SMTP dialogues and maps response codes (235 success, 535 failure, 421/454 rate-limited, 550 locked-out).
+  - **Files**: `src/protocols/smtp.rs`, `src/protocols/mod.rs`
+  - **Verify**: Mock tests in `src/protocols/smtp.rs` testing multiline banners, PLAIN and LOGIN paths, and error codes.
+
+- [x] **Task 8.2: MySQL Protocol Module & In-Process Test Harness**
+  - **Description**: Implement `MysqlModule` (feature = `mysql`, dependency = `sha1`) supporting:
+    - Default port: 3306.
+    - Native wire-level codec for MySQL 4-byte packet framing (3-byte length + sequence ID).
+    - `HandshakeV10` packet decoder: protocol version, server version, connection ID, 8-byte salt part 1, capabilities, and salt part 2.
+    - `HandshakeResponse41` encoder with utf8mb4 collation and `mysql_native_password` SHA-1 double-hash scramble:
+      $$\text{scramble} = \text{SHA1}(\text{password}) \oplus \text{SHA1}(\text{salt} \parallel \text{SHA1}(\text{SHA1}(\text{password})))$$
+    - Server response packet decoding: `0x00` OK, `0xFF` ERR. Error mapping: code 1045 (`ER_ACCESS_DENIED_ERROR`) to `AuthResult::Failure`, code 1129 (`ER_HOST_IS_BLOCKED`) and 1040 (`ER_CON_COUNT_ERROR`) to `AuthResult::RateLimited`.
+    - SOCKS5 proxy support.
+  - **Acceptance**: Authenticates against simulated MySQL handshake dialogues and accurately parses ERR packets without desynchronization.
+  - **Files**: `src/protocols/mysql.rs`, `src/protocols/mod.rs`
+  - **Verify**: Hermetic in-process mock server tests in `src/protocols/mysql.rs`.
+
+- [x] **Task 8.3: PostgreSQL Protocol Module & In-Process Test Harness**
+  - **Description**: Implement `PostgresModule` (feature = `postgres`, dependency = `md5`) supporting:
+    - Default port: 5432.
+    - Frontend/Backend Protocol 3.0 message framing (1-byte type + 4-byte big-endian length).
+    - `StartupMessage` encoder: length prefix + version `196608` + `user` and `database` parameters.
+    - Server `'R'` Authentication Request decoder:
+      - Type 0: `AuthenticationOk` $\to$ `AuthResult::Success`.
+      - Type 3: `AuthenticationCleartextPassword` $\to$ sends `'p'` password message.
+      - Type 5: `AuthenticationMD5Password` with 4-byte salt $\to$ computes MD5 double-hash + salt scramble and sends `'p'` message.
+    - Server `'E'` ErrorResponse decoder: parses SQLSTATE fields (`28P01` / `28000` to `AuthResult::Failure`, `53300` to `AuthResult::RateLimited`).
+    - SOCKS5 proxy support.
+  - **Acceptance**: Completes Frontend/Backend 3.0 handshake with cleartext and MD5 challenges against simulated mock listeners.
+  - **Files**: `src/protocols/postgres.rs`, `src/protocols/mod.rs`
+  - **Verify**: Hermetic in-process mock server tests in `src/protocols/postgres.rs`.
+
+- [x] **Task 8.4: Extended Protocol Wiring, CLI Options & Integration Tests**
+  - **Description**: Wire extended protocols into the application CLI and runner engine:
+    - Add `Smtp`, `Smtps`, `Mysql`, `Postgres` to `Service` enum in `src/cli.rs`.
+    - Register default ports and URL schemes (`smtp://`, `smtps://`, `mysql://`, `postgres://`, `postgresql://`).
+    - Add `--database <NAME>` option to `ModuleOptions` in `src/cli.rs`.
+    - Wire `build_module` in `src/engine/runner.rs` to construct the respective module instances.
+    - Update `Cargo.toml` features (`smtp`, `mysql`, `postgres`, `default`).
+    - Add end-to-end integration tests in `tests/cli_process.rs` verifying CLI validation and dry-run output for the new services.
+  - **Acceptance**: `betterh smtp ...`, `betterh mysql ...`, and `betterh postgres ...` parse, validate, and execute cleanly.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`
+  - **Verify**: `cargo test`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`.
+
+### Phase 8 Checkpoint
+
+Completed (2026-09-26) on `feat/phase-8-extended-protocols`: Tasks 8.1–8.4 are implemented
+(`SmtpModule` with PLAIN/LOGIN and RFC 5321 multiline parsing, `MysqlModule` with 4-byte wire framing,
+`HandshakeV10` parsing and `mysql_native_password` scramble, `PostgresModule` with Frontend/Backend 3.0
+and MD5 salted challenges, CLI `--database` option and URL parsing, and runner engine wiring).
+
+Verification: 201 tests passed across unit and integration suites.
+`cargo check --no-default-features --features <proto>` verifies clean independent compilation.
+`cargo fmt --check` and `cargo clippy --all-targets --all-features --locked -- -D warnings` passed with 0 warnings.
+
+```bash
+cargo test protocols::smtp protocols::mysql protocols::postgres
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
 ## Verification Matrix
 
 | Area | Check | Command |

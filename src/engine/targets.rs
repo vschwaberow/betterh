@@ -76,7 +76,7 @@ impl Expander {
                     return Ok(Some(Target {
                         host: ip.to_string(),
                         port: self.service.default_port(),
-                        ssl: self.service == Service::Https,
+                        ssl: self.service == Service::Https || self.service == Service::Smtps,
                         path: matches!(self.service, Service::Http | Service::Https)
                             .then(|| "/".into()),
                         ip: Some(ip),
@@ -123,7 +123,9 @@ fn parse_entry(service: Service, value: &str) -> Result<TargetSource, &'static s
         }
         let both_http = matches!(service, Service::Http | Service::Https)
             && matches!(parsed.service, Service::Http | Service::Https);
-        if service != parsed.service && !both_http {
+        let both_smtp = matches!(service, Service::Smtp | Service::Smtps)
+            && matches!(parsed.service, Service::Smtp | Service::Smtps);
+        if service != parsed.service && !both_http && !both_smtp {
             return Err("URL protocol does not match the selected service");
         }
         return Ok(parsed.source);
