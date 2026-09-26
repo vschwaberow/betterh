@@ -11,6 +11,8 @@ use thiserror::Error;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
+use super::tools::{self, ToolRuntime, call_tool};
+
 /// MCP protocol version negotiated during `initialize`.
 pub const PROTOCOL_VERSION: &str = "2024-11-05";
 
@@ -183,7 +185,7 @@ pub struct InitializeParams {
 }
 
 /// Server capability advertisement returned from `initialize`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
     /// Tools capability (populated in task 12.2).
@@ -212,7 +214,10 @@ impl InitializeResult {
     pub fn betterh() -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION.into(),
-            capabilities: ServerCapabilities::default(),
+            capabilities: ServerCapabilities {
+                tools: Some(serde_json::json!({ "listChanged": false })),
+                resources: None,
+            },
             server_info: Implementation {
                 name: SERVER_NAME.into(),
                 version: env!("CARGO_PKG_VERSION").into(),
@@ -306,10 +311,11 @@ where
     }
 }
 
-/// Stateful MCP handshake handler (`initialize` / `initialized` / `ping`).
+/// Stateful MCP handshake handler (`initialize` / `initialized` / `ping` / tools).
 #[derive(Debug, Clone)]
 pub struct McpSession {
     state: SessionState,
+    runtime: ToolRuntime,
 }
 
 impl Default for McpSession {
@@ -321,9 +327,10 @@ impl Default for McpSession {
 impl McpSession {
     /// Create a session waiting for `initialize`.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             state: SessionState::WaitingInitialize,
+            runtime: ToolRuntime::default(),
         }
     }
 
@@ -331,6 +338,12 @@ impl McpSession {
     #[must_use]
     pub const fn state(&self) -> SessionState {
         self.state
+    }
+
+    /// Shared tool runtime snapshot.
+    #[must_use]
+    pub const fn runtime(&self) -> &ToolRuntime {
+        &self.runtime
     }
 
     /// Parse a raw JSON value into a request or notification.
@@ -396,9 +409,15 @@ impl McpSession {
     /// # Errors
     /// Returns [`McpError::Session`] for notifications that cannot be answered
     /// with a JSON-RPC error response.
-    pub fn handle_value(&mut self, value: &Value) -> Result<Option<JsonRpcResponse>, McpError> {
+    pub async fn handle_value(
+        &mut self,
+        value: &Value,
+        cancel: &CancellationToken,
+    ) -> Result<Option<JsonRpcResponse>, McpError> {
         match Self::classify(value) {
-            Ok(IncomingKind::Request(request)) => Ok(Some(self.handle_request(request))),
+            Ok(IncomingKind::Request(request)) => {
+                Ok(Some(self.handle_request(request, cancel).await))
+            }
             Ok(IncomingKind::Notification(notification)) => {
                 self.handle_notification(&notification)?;
                 Ok(None)
@@ -419,10 +438,16 @@ impl McpSession {
         }
     }
 
-    fn handle_request(&mut self, request: JsonRpcRequest) -> JsonRpcResponse {
+    async fn handle_request(
+        &mut self,
+        request: JsonRpcRequest,
+        cancel: &CancellationToken,
+    ) -> JsonRpcResponse {
         match request.method.as_str() {
             "initialize" => self.handle_initialize(request),
             "ping" => self.handle_ping(request),
+            "tools/list" => self.handle_tools_list(request),
+            "tools/call" => self.handle_tools_call(request, cancel).await,
             other => JsonRpcResponse::error(
                 request.id,
                 JsonRpcError::new(
@@ -505,6 +530,87 @@ impl McpSession {
         JsonRpcResponse::result(request.id, Value::Object(serde_json::Map::new()))
     }
 
+    fn handle_tools_list(&self, request: JsonRpcRequest) -> JsonRpcResponse {
+        if self.state != SessionState::Ready {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(
+                    error_code::INVALID_REQUEST,
+                    "tools/list requires an initialized session",
+                ),
+            );
+        }
+        let tools = tools::tool_definitions();
+        match serde_json::to_value(serde_json::json!({ "tools": tools })) {
+            Ok(value) => JsonRpcResponse::result(request.id, value),
+            Err(err) => JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(
+                    error_code::INTERNAL_ERROR,
+                    format!("failed to encode tools/list: {err}"),
+                ),
+            ),
+        }
+    }
+
+    async fn handle_tools_call(
+        &mut self,
+        request: JsonRpcRequest,
+        cancel: &CancellationToken,
+    ) -> JsonRpcResponse {
+        if self.state != SessionState::Ready {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(
+                    error_code::INVALID_REQUEST,
+                    "tools/call requires an initialized session",
+                ),
+            );
+        }
+        let Some(params) = request.params else {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, "tools/call requires params"),
+            );
+        };
+        let Some(name) = params.get("name").and_then(Value::as_str) else {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, "tools/call requires name"),
+            );
+        };
+        let arguments = params
+            .get("arguments")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+
+        match call_tool(name, arguments, &mut self.runtime, cancel).await {
+            Ok(result) => match serde_json::to_value(result) {
+                Ok(value) => JsonRpcResponse::result(request.id, value),
+                Err(err) => JsonRpcResponse::error(
+                    request.id,
+                    JsonRpcError::new(
+                        error_code::INTERNAL_ERROR,
+                        format!("failed to encode tools/call result: {err}"),
+                    ),
+                ),
+            },
+            Err(err) => {
+                let result = tools::ToolResult::err_message(err.to_string());
+                match serde_json::to_value(result) {
+                    Ok(value) => JsonRpcResponse::result(request.id, value),
+                    Err(encode_err) => JsonRpcResponse::error(
+                        request.id,
+                        JsonRpcError::new(
+                            error_code::INTERNAL_ERROR,
+                            format!("failed to encode tool error: {encode_err}"),
+                        ),
+                    ),
+                }
+            }
+        }
+    }
+
     fn handle_notification(&mut self, notification: &JsonRpcNotification) -> Result<(), McpError> {
         match notification.method.as_str() {
             "notifications/initialized" => {
@@ -552,7 +658,7 @@ where
             ));
         };
 
-        match session.handle_value(&value) {
+        match session.handle_value(&value, cancel).await {
             Ok(Some(response)) => transport.write_response(response).await?,
             Ok(None) => {}
             Err(err) => return Err(err),
@@ -630,13 +736,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn lifecycle_initialize_initialized_and_ping() {
+    #[tokio::test]
+    async fn lifecycle_initialize_initialized_and_ping() {
         let mut session = McpSession::new();
+        let cancel = CancellationToken::new();
         assert_eq!(session.state(), SessionState::WaitingInitialize);
 
         let response = session
-            .handle_value(&initialize_request(1, PROTOCOL_VERSION))
+            .handle_value(&initialize_request(1, PROTOCOL_VERSION), &cancel)
+            .await
             .unwrap()
             .expect("initialize response");
         assert!(response.error.is_none());
@@ -647,29 +755,39 @@ mod tests {
         assert_eq!(session.state(), SessionState::WaitingInitialized);
 
         session
-            .handle_value(&serde_json::json!({
-                "jsonrpc": "2.0",
-                "method": "notifications/initialized"
-            }))
+            .handle_value(
+                &serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized"
+                }),
+                &cancel,
+            )
+            .await
             .unwrap();
         assert_eq!(session.state(), SessionState::Ready);
 
         let ping = session
-            .handle_value(&serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "ping"
-            }))
+            .handle_value(
+                &serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "ping"
+                }),
+                &cancel,
+            )
+            .await
             .unwrap()
             .expect("ping response");
         assert_eq!(ping.result, Some(serde_json::json!({})));
     }
 
-    #[test]
-    fn unsupported_protocol_version_is_rejected() {
+    #[tokio::test]
+    async fn unsupported_protocol_version_is_rejected() {
         let mut session = McpSession::new();
+        let cancel = CancellationToken::new();
         let response = session
-            .handle_value(&initialize_request(1, "1999-01-01"))
+            .handle_value(&initialize_request(1, "1999-01-01"), &cancel)
+            .await
             .unwrap()
             .expect("error response");
         let error = response.error.expect("error");
@@ -677,15 +795,20 @@ mod tests {
         assert_eq!(session.state(), SessionState::WaitingInitialize);
     }
 
-    #[test]
-    fn ping_before_ready_is_rejected() {
+    #[tokio::test]
+    async fn ping_before_ready_is_rejected() {
         let mut session = McpSession::new();
+        let cancel = CancellationToken::new();
         let response = session
-            .handle_value(&serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "ping"
-            }))
+            .handle_value(
+                &serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "ping"
+                }),
+                &cancel,
+            )
+            .await
             .unwrap()
             .expect("error response");
         assert_eq!(
@@ -711,7 +834,10 @@ mod tests {
                 .read_message(&cancel)
                 .await?
                 .expect("ping message");
-            let response = session.handle_value(&value)?.expect("ping response");
+            let response = session
+                .handle_value(&value, &cancel)
+                .await?
+                .expect("ping response");
             transport.write_response(response).await?;
             Ok::<_, McpError>(())
         });
