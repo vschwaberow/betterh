@@ -628,6 +628,7 @@ pub(crate) fn list_protocols_payload() -> Value {
     push_protocol(&mut protocols, "imaps", 993, cfg!(feature = "imap"));
     push_protocol(&mut protocols, "ldap", 389, cfg!(feature = "ldap"));
     push_protocol(&mut protocols, "ldaps", 636, cfg!(feature = "ldap"));
+    push_protocol(&mut protocols, "smb", 445, cfg!(feature = "smb"));
     json!({ "protocols": protocols })
 }
 

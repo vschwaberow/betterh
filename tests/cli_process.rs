@@ -500,6 +500,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         "imaps",
         "ldap",
         "ldaps",
+        "smb",
     ] {
         let mut args = vec![
             service,

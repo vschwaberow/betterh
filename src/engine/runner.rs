@@ -336,6 +336,7 @@ fn service_name(service: Service) -> &'static str {
         Service::Imaps => "imaps",
         Service::Ldap => "ldap",
         Service::Ldaps => "ldaps",
+        Service::Smb => "smb",
     }
 }
 
@@ -431,6 +432,10 @@ fn build_module(
                 .with_proxy(proxy)
                 .with_insecure(cli.module.insecure),
         )),
+        #[cfg(feature = "smb")]
+        Service::Smb => Ok(Arc::new(
+            crate::protocols::SmbModule::new().with_proxy(proxy),
+        )),
         #[cfg(not(feature = "ftp"))]
         Service::Ftp => Err(RunError::Message(
             "FTP support was not compiled in (enable feature `ftp`)".into(),
@@ -466,6 +471,10 @@ fn build_module(
         #[cfg(not(feature = "ldap"))]
         Service::Ldap | Service::Ldaps => Err(RunError::Message(
             "LDAP support was not compiled in (enable feature `ldap`)".into(),
+        )),
+        #[cfg(not(feature = "smb"))]
+        Service::Smb => Err(RunError::Message(
+            "SMB support was not compiled in (enable feature `smb`)".into(),
         )),
     }
 }
