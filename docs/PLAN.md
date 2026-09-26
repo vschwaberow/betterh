@@ -763,7 +763,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
   - **Files**: `src/mcp/transport.rs`, `src/mcp/mod.rs`
   - **Verify**: Unit tests verifying framing, serialization, and lifecycle methods.
 
-- [ ] **Task 12.2: MCP Tool Definitions & Execution Engine Dispatch**
+- [x] **Task 12.2: MCP Tool Definitions & Execution Engine Dispatch**
   - **Description**: Implement `tools/list` and `tools/call` in `src/mcp/tools.rs`:
     - `audit_dryrun`: Validates targets and options, runs non-intrusive reachability and canary probe, returns candidate counts and timing estimates without sending attacks.
     - `audit_execute`: Run controlled authentication testing or password spray with rate limiting and timeout bounds.
