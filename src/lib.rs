@@ -6,6 +6,7 @@
 pub mod cli;
 pub mod config;
 pub mod engine;
+pub mod feasibility;
 pub mod fsutil;
 pub mod protocols;
 pub mod report;
