@@ -348,7 +348,7 @@ pub trait ProtocolModule: Send + Sync {
 
 #### D. Enterprise Protocol Feasibility & Architecture Track (Phase 11)
 
-Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`src/feasibility/`, Cargo feature `feasibility-smb` / later `feasibility-rdp`) to prevent bloating default builds with enterprise framing while evaluating clean, pure Rust native codecs without C bindings (`libsmbclient`, `sspi`, OpenSSL CredSSP helpers, etc.).
+Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`src/feasibility/`, Cargo features `feasibility-smb` / `feasibility-rdp`) to prevent bloating default builds with enterprise framing while evaluating clean, pure Rust native codecs without C bindings (`libsmbclient`, `sspi`, OpenSSL CredSSP helpers, etc.).
 
 ##### D.1 SMBv2/v3 & NTLMSSP (Task 11.1) — Feasibility
 
@@ -381,10 +381,35 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
   - **Remaining before a full `ProtocolModule`**: dialect/feature negotiation edge cases (SMB 3.1.1 preauth hash), signing/sealing keys, guest/anonymous paths, and live interoperability fixtures — tracked as post-feasibility work, not MVP.
 - **Prototype location**: `src/feasibility/smb.rs` (feature = `feasibility-smb`), hermetic unit tests only (no live SMB server required for Phase 11.1).
 
-##### D.2 RDP / CredSSP / NLA (Task 11.2) — Placeholder
+##### D.2 RDP / CredSSP / NLA (Task 11.2) — Feasibility
 
-- RDP (TCP port 3389): ISO TPKT (RFC 1006) framing, X.224 Connection Request (`CR`), Negotiation Request (`RDP_NEG_REQ`), TLS upgrade, CredSSP framing, and NLA containing SPNEGO/NTLMv2 tokens.
-- Detailed feasibility and prototype deferred to Task 11.2 (reuses NTLMSSP primitives from D.1 where possible).
+- **Transport**: TCP/3389. Every PDU is an ISO TPKT (RFC 1006): version `0x03`, reserved `0x00`, 2-byte big-endian length covering the entire TPKT (header + payload).
+- **X.224 Connection Request (`CR`)**: TPDU code `0xE0`, DST-REF `0`, SRC-REF client-chosen, class `0x00`, then variable user data:
+  1. Optional cookie `Cookie: mstshash=<user>\r\n` (ASCII).
+  2. `RDP_NEG_REQ` (MS-RDPBCGR §2.2.1.1.1): `type=0x01`, `flags`, `length=8`, `requestedProtocols` (little-endian bitmask).
+- **Protocol negotiation bits** (OR-able):
+  - `PROTOCOL_RDP` = `0x00000000` (legacy, no TLS)
+  - `PROTOCOL_SSL` = `0x00000001` (TLS only)
+  - `PROTOCOL_HYBRID` = `0x00000002` (CredSSP / NLA)
+  - `PROTOCOL_HYBRID_EX` = `0x00000008` (Extended CredSSP)
+- **Server reply**: `RDP_NEG_RSP` (`type=0x02`) selects one protocol, or `RDP_NEG_FAILURE` (`type=0x03`). After `PROTOCOL_SSL` / `PROTOCOL_HYBRID` / `PROTOCOL_HYBRID_EX`, the client upgrades the same TCP socket with TLS (reuse existing `TransportStream` / rustls — no custom TLS stack).
+- **CredSSP (MS-CSSP) on TLS**: ASN.1 `TSRequest` SEQUENCE carrying:
+  - `version` `[0] INTEGER` (prototype targets version 6)
+  - `negoTokens` `[1] NegoData` — SPNEGO/NTLMSSP Type 1 → Type 2 → Type 3 (NTLMv2 proofs from §D.1)
+  - Later optional `authInfo` / `pubKeyAuth` / `clientNonce` for credential encryption and channel binding (out of Phase 11.2 encode scope)
+- **Type-state sketch**:
+  ```text
+  TcpConnected → Negotiated(Ssl|Hybrid) → TlsUpgraded → CredSspChallenged → Authenticated
+  ```
+  Only `Negotiated(Hybrid*)` may start CredSSP; only `TlsUpgraded` may send `TSRequest`; NTLMSSP Type 3 only after a Type 2 challenge inside `negoTokens`.
+- **Allocation / performance notes**:
+  - Fixed TPKT + X.224 + `RDP_NEG_REQ` fit in a small stack/`ArrayVec` buffer; cookie length is bounded by username size.
+  - CredSSP DER buffers are one reusable `Vec<u8>` scratch; NTLMv2 hashing stays in `spawn_blocking` at a future `ProtocolModule` boundary (same rule as §D.1).
+  - No OpenSSL CredSSP helpers / FreeRDP / `sspi` FFI; TLS via existing rustls feature path.
+- **Go / no-go for production module**:
+  - **Go (prototype proven)**: TPKT ↔ X.224 `CR` with cookie + `RDP_NEG_REQ`/`RDP_NEG_RSP` framing, and minimal CredSSP `TSRequest` DER wrap/unwrap of an opaque NegoToken, are implementable in-tree without C.
+  - **Remaining before a full `ProtocolModule`**: live TLS+CredSSP interop, `pubKeyAuth` channel binding, `TSCredentials` encryption, Extended CredSSP nonce handling, and Kerberos mech alternate — tracked as post-feasibility work.
+- **Prototype location**: `src/feasibility/rdp.rs` (feature = `feasibility-rdp`), hermetic unit tests only (no live RDP server required for Phase 11.2). NTLMv2 crypto reuse is documented against §D.1 (`feasibility-smb`); this crate feature stays independent so default CI can enable either gate alone.
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
@@ -749,7 +774,8 @@ betterh/
     │   └── wordlist.rs       # Streaming wordlist generator (O(1) RAM / -)
     ├── feasibility/          # Phase 11 wire prototypes (feature-gated)
     │   ├── mod.rs
-    │   └── smb.rs            # SMBv2/NTLMSSP framing prototype (feasibility-smb)
+    │   ├── smb.rs            # SMBv2/NTLMSSP framing prototype (feasibility-smb)
+│   └── rdp.rs            # TPKT/X.224/CredSSP framing prototype (feasibility-rdp)
     ├── protocols/            # ProtocolModule trait and implementations
     │   ├── mod.rs            # ProtocolModule trait and registry
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests
