@@ -546,6 +546,8 @@ betterh man > /usr/share/man/man1/betterh.1
 ```
 betterh/
 ├── Cargo.toml
+├── LICENSE-MIT               # MIT license text
+├── LICENSE-APACHE            # Apache-2.0 license text
 ├── README.md                 # Quickstart, build, authorized-use notice
 ├── AGENTS.md                 # Agent guidelines, rules, and workflows
 ├── .github/
