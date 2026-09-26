@@ -732,6 +732,32 @@ pub enum IncomingKind {
     Notification(JsonRpcNotification),
 }
 
+/// Run the full MCP server loop: handshake, then requests until EOF or cancel.
+///
+/// # Errors
+/// Propagates transport, JSON, session, and cancellation failures.
+pub async fn serve<R, W>(
+    transport: &mut McpTransport<R, W>,
+    session: &mut McpSession,
+    cancel: &CancellationToken,
+) -> Result<(), McpError>
+where
+    R: AsyncBufRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    run_until_ready(transport, session, cancel).await?;
+    loop {
+        let Some(value) = transport.read_message(cancel).await? else {
+            return Ok(());
+        };
+        match session.handle_value(&value, cancel).await {
+            Ok(Some(response)) => transport.write_response(response).await?,
+            Ok(None) => {}
+            Err(err) => return Err(err),
+        }
+    }
+}
+
 /// Drive framing + lifecycle until the session is [`SessionState::Ready`] or EOF.
 ///
 /// # Errors

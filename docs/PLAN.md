@@ -785,7 +785,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
   - **Files**: `src/mcp/resources.rs`, `src/mcp/mod.rs`
   - **Verify**: Unit tests for resource discovery, valid URI reads, and path traversal rejection.
 
-- [ ] **Task 12.4: CLI Integration (`betterh mcp`), Subcommand & Hermetic Mock Tests**
+- [x] **Task 12.4: CLI Integration (`betterh mcp`), Subcommand & Hermetic Mock Tests**
   - **Description**: Wire MCP server into CLI and application lifecycle:
     - Add `mcp` subcommand (`betterh mcp [--stdio]`) in `src/cli.rs`.
     - Wire `main.rs` dispatch to initialize the MCP server loop with cooperative cancellation via `CancellationToken` on `SIGINT`.

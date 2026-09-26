@@ -128,6 +128,13 @@ pub enum Command {
     Completions { shell: clap_complete::Shell },
     /// Generate a manual page (UI phase).
     Man,
+    /// Run the Model Context Protocol (MCP) server.
+    #[cfg(feature = "mcp")]
+    Mcp {
+        /// Serve newline-delimited JSON-RPC over stdio (default and currently required).
+        #[arg(long, default_value_t = true)]
+        stdio: bool,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -171,7 +178,7 @@ pub struct ModuleOptions {
     version,
     about = "Network authentication auditing",
     args_conflicts_with_subcommands = true,
-    after_help = "Quickstart:\n  betterh ssh://admin@127.0.0.1:2222 -P passwords.txt\n  betterh ssh 127.0.0.1 -L users.txt -P passwords.txt\n  betterh https://localhost/login -m post-form --body 'user={USER}&pass={PASS}'\n  betterh wizard\n\nExecution: live attacks run after scope/canary checks; use --dry-run to audit combinations only."
+    after_help = "Quickstart:\n  betterh ssh://admin@127.0.0.1:2222 -P passwords.txt\n  betterh ssh 127.0.0.1 -L users.txt -P passwords.txt\n  betterh https://localhost/login -m post-form --body 'user={USER}&pass={PASS}'\n  betterh wizard\n  betterh mcp\n\nExecution: live attacks run after scope/canary checks; use --dry-run to audit combinations only."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -777,6 +784,18 @@ mod tests {
                     .unwrap()
                     .is_none()
             );
+        }
+        #[cfg(feature = "mcp")]
+        {
+            for args in [vec!["betterh", "mcp"], vec!["betterh", "mcp", "--stdio"]] {
+                assert!(
+                    Cli::try_parse_from(args)
+                        .unwrap()
+                        .validate()
+                        .unwrap()
+                        .is_none()
+                );
+            }
         }
     }
 }
