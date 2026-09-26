@@ -11,7 +11,8 @@ pub mod mock;
     feature = "mysql",
     feature = "postgres",
     feature = "redis",
-    feature = "imap"
+    feature = "imap",
+    feature = "ldap"
 ))]
 pub mod socks;
 pub mod types;
@@ -42,6 +43,9 @@ pub mod redis;
 
 #[cfg(feature = "imap")]
 pub mod imap;
+
+#[cfg(feature = "ldap")]
+pub mod ldap;
 
 use std::time::Duration;
 
@@ -124,3 +128,6 @@ pub use redis::RedisModule;
 
 #[cfg(feature = "imap")]
 pub use imap::ImapModule;
+
+#[cfg(feature = "ldap")]
+pub use ldap::LdapModule;

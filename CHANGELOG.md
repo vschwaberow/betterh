@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- LDAP/LDAPS Simple Bind (RFC 4511 BER) with implicit TLS on port 636
 - IMAP/IMAPS LOGIN with STARTTLS and implicit TLS via shared `TransportStream`
 - Redis RESP `AUTH` module (inline password and ACL username/password) with hermetic mocks
 - PostgreSQL `SCRAM-SHA-256` SASL authentication (RFC 5802 / RFC 7677)

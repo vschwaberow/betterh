@@ -6,7 +6,7 @@ description = "A modern, high-performance, memory-safe network authentication au
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
@@ -16,6 +16,7 @@ mysql = ["dep:sha1", "dep:sha2", "dep:rsa", "dep:rand", "tls"]
 postgres = ["dep:md5", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:base64", "tls"]
 redis = []
 imap = ["tls"]
+ldap = ["tls"]
 
 [dependencies]
 # Async Runtime & Concurrency
