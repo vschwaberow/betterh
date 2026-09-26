@@ -28,6 +28,7 @@
   - Interactive runtime keybindings (`Space` status snapshot, `p` pause/resume, `+`/`-` dynamic threads, `c` checkpoint, `q` exit).
   - Pre-flight `--dry-run` combination audit and optional interactive wizard (`betterh wizard`).
   - Actionable Cargo-style diagnostics with remediation tips.
+- **Model Context Protocol (MCP) Server Interface**: Native stdio JSON-RPC 2.0 interface (`betterh mcp`) enabling AI coding assistants (Antigravity, Claude, Cursor) and automated orchestration pipelines to discover capabilities, run pre-flight audits, and execute controlled authentication tests with strict scope guardrails.
 
 ---
 
@@ -58,16 +59,18 @@
 ### Protocol Feature Flags
 ```toml
 [features]
-default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap", "mcp"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
-smtp = ["dep:base64", "dep:tokio-rustls"]
+tls = ["dep:tokio-rustls", "dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
+smtp = ["dep:base64", "tls"]
 mysql = ["dep:sha1", "dep:sha2", "dep:rsa", "dep:rand", "tls"]
 postgres = ["dep:md5", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:base64", "tls"]
 redis = []
 imap = ["tls"]
 ldap = ["tls"]
+mcp = []
 ```
 
 ### Dev Dependencies (Hermetic Testing)
@@ -79,16 +82,18 @@ ldap = ["tls"]
 ## 4. Architectural Overview
 
 ```
-                                  +---------------------------+
-                                  |       CLI / Config        |
-                                  | (clap, targets, wizard)   |
-                                  +-------------+-------------+
-                                                |
-                                                v
-                                  +---------------------------+
-                                  | Target & Scope Expander   |
-                                  | (CIDR, File -M, Excludes) |
-                                  +-------------+-------------+
+           +---------------------------+       +---------------------------+
+           |       CLI / Config        |       |    MCP Server (stdio)     |
+           | (clap, targets, wizard)   |       | (JSON-RPC 2.0 / tools)    |
+           +-------------+-------------+       +-------------+-------------+
+                         |                                   |
+                         +-----------------+-----------------+
+                                           |
+                                           v
+                             +---------------------------+
+                             | Target & Scope Expander   |
+                             | (CIDR, File -M, Excludes) |
+                             +-------------+-------------+
                                                 |
                                                 v
                                   +---------------------------+
@@ -579,6 +584,25 @@ error: TLS handshake failed for https://10.0.0.5:8443/login
   = tip: Use `--insecure` or `-k` to bypass TLS certificate validation for testing.
 ```
 
+### 8.6 Model Context Protocol (MCP) Server Interface
+Betterh provides a native Model Context Protocol (MCP) server over `stdio` (`betterh mcp`), enabling AI coding assistants (Antigravity, Claude, Cursor) and automated orchestration pipelines to interact with Betterh safely:
+- **Transport**: Newline-delimited JSON-RPC 2.0 messages over asynchronous standard I/O (`tokio::io::stdin` / `stdout`).
+- **Protocol Lifecycle**: Implements `initialize` (capabilities negotiation, version `2024-11-05`), `notifications/initialized`, `ping`, and clean cancellation.
+- **MCP Tools**:
+  - `audit_dryrun`: Validates targets and options, runs non-intrusive reachability and canary probe, returns combination counts and timing estimates without transmitting attacks.
+  - `audit_execute`: Run controlled authentication audit or password spray with rate limiting, concurrency cap, and skip rules.
+  - `validate_scope`: Test IP/CIDR against exclusion lists and detect public internet targets requiring confirmation.
+  - `list_protocols`: Return supported protocols, default ports, and compiled feature states.
+  - `session_status`: Inspect active or checkpointed audit session.
+- **MCP Resources**:
+  - `betterh://protocols`: JSON schema and feature state of all protocol modules.
+  - `betterh://reports/{hash}`: Finding logs from completed or checkpointed audits (POSIX mode `0600` access enforced).
+  - `betterh://session/current`: Live metrics, attempt counts, and speed stats.
+- **Security & Guardrails**:
+  - All operations respect Betterh's scope exclusion filters (`--exclude`, `--exclude-file`).
+  - Pre-flight canary probes detect catch-all targets and require explicit confirmation.
+  - Post-finding reporting follows strict POSIX mode `0600` permissions.
+
 ---
 
 ## 9. CLI Grammar & Configuration System
@@ -707,6 +731,11 @@ betterh/
     │   ├── mod.rs
     │   ├── jsonl.rs          # JSON / JSONL streaming output (0600)
     │   └── tui.rs            # Indicatif live dashboard with pinned success feed
+    ├── mcp/                  # Model Context Protocol (MCP) server (feature = "mcp")
+    │   ├── mod.rs            # MCP server bootstrap & lifecycle
+    │   ├── transport.rs      # Async stdio JSON-RPC 2.0 transport
+    │   ├── tools.rs          # MCP tool definitions (dryrun, execute, scope)
+    │   └── resources.rs      # MCP resources (protocols, reports, sessions)
     └── ui/                   # UX components & interactive wizard
         ├── mod.rs
         ├── completions.rs    # Shell completion & manpage generators
@@ -722,6 +751,9 @@ betterh/
 # General invocation (URL or Positional)
 betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
+
+# Launch Model Context Protocol (MCP) server over stdio
+betterh mcp
 
 # Interactive guided wizard
 betterh wizard
