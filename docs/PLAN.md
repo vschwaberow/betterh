@@ -97,6 +97,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |     Phase 11: Enterprise Protocol Feasibility (SMB & RDP)         |
 |  - 11.1 SMBv2/v3 & NTLMSSP Framing Architectural Feasibility      |
 |  - 11.2 RDP / CredSSP / NLA Framing Architectural Feasibility     |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 12: Model Context Protocol (MCP) Server Integration       |
+|  - 12.1 MCP Stdio Transport & JSON-RPC 2.0 Framing                |
+|  - 12.2 MCP Tools (audit_dryrun, audit_execute, validate_scope)   |
+|  - 12.3 MCP Resources & Secure Session / Finding Reporting        |
+|  - 12.4 CLI Subcommand (betterh mcp) & Hermetic Duplex Tests      |
 +-------------------------------------------------------------------+
 ```
 
@@ -680,6 +689,61 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 
 ---
 
+## Phase 12: Model Context Protocol (MCP) Server Integration
+
+**Goal**: Expose Betterh capabilities as a standards-compliant Model Context Protocol (MCP) server over `stdio` using JSON-RPC 2.0, enabling AI coding agents (Antigravity, Claude, Cursor) and automated orchestration pipelines to run safe pre-flight audits, dry-runs, scope validations, and targeted authentication testing with strict guardrails.
+
+### Tasks
+- [ ] **Task 12.1: MCP Protocol Framing & JSON-RPC 2.0 Transport**
+  - **Description**: Implement MCP stdio transport (`src/mcp/transport.rs`) over Tokio async stdin/stdout using newline-delimited JSON-RPC 2.0 messages. Support MCP handshake: `initialize` request with client/server capabilities, protocol version negotiation (`2024-11-05`), `notifications/initialized`, `ping`, and clean cancellation. Feature-gated via Cargo feature `mcp`. Zero new external dependencies (uses existing `tokio`, `serde`, `serde_json`).
+  - **Acceptance**: Bidirectional async framing passes unit tests; cleanly serializes and deserializes JSON-RPC 2.0 requests, responses, and errors.
+  - **Files**: `src/mcp/transport.rs`, `src/mcp/mod.rs`
+  - **Verify**: Unit tests verifying framing, serialization, and lifecycle methods.
+
+- [ ] **Task 12.2: MCP Tool Definitions & Execution Engine Dispatch**
+  - **Description**: Implement `tools/list` and `tools/call` in `src/mcp/tools.rs`:
+    - `audit_dryrun`: Validates targets and options, runs non-intrusive reachability and canary probe, returns candidate counts and timing estimates without sending attacks.
+    - `audit_execute`: Run controlled authentication testing or password spray with rate limiting and timeout bounds.
+    - `validate_scope`: Test IP/CIDR against exclusion lists and detect public internet targets requiring confirmation.
+    - `list_protocols`: Return supported protocols, default ports, and feature states.
+    - `session_status`: Inspect active or checkpointed audit session.
+    Route tool invocations safely into Betterh core (`engine::runner`, `engine::dryrun`, `engine::scope`), respecting all scope guardrails and exit rules.
+  - **Acceptance**: Exposes valid JSON Schema for all tools; tool calls execute correctly and return structured JSON results.
+  - **Files**: `src/mcp/tools.rs`, `src/mcp/mod.rs`
+  - **Verify**: Unit tests for schema validity and simulated tool execution.
+
+- [ ] **Task 12.3: MCP Resources & Secure Session / Finding Reporting**
+  - **Description**: Implement `resources/list` and `resources/read` in `src/mcp/resources.rs`:
+    - `betterh://protocols`: Static registry metadata of compiled protocol capabilities.
+    - `betterh://reports/{hash}`: Finding logs from completed or checkpointed audits.
+    - `betterh://session/current`: Live metrics, attempts count, and rate information.
+    Enforce POSIX mode `0600` access and path traversal protections when resolving report resources.
+  - **Acceptance**: Clients can query resource lists and read report content; invalid URIs return standard MCP error codes (-32602).
+  - **Files**: `src/mcp/resources.rs`, `src/mcp/mod.rs`
+  - **Verify**: Unit tests for resource discovery, valid URI reads, and path traversal rejection.
+
+- [ ] **Task 12.4: CLI Integration (`betterh mcp`), Subcommand & Hermetic Mock Tests**
+  - **Description**: Wire MCP server into CLI and application lifecycle:
+    - Add `mcp` subcommand (`betterh mcp [--stdio]`) in `src/cli.rs`.
+    - Wire `main.rs` dispatch to initialize the MCP server loop with cooperative cancellation via `CancellationToken` on `SIGINT`.
+    - Implement hermetic in-process integration tests (`tests/mcp_server.rs`) using `tokio::io::duplex` simulating an MCP client connecting, exchanging `initialize`, listing tools, executing `audit_dryrun`, and shutting down cleanly.
+    - Update `Cargo.toml` features (`mcp`, included in `default`).
+  - **Acceptance**: `betterh mcp` launches stdio server; duplex tests pass all JSON-RPC 2.0 and MCP tool interactions.
+  - **Files**: `src/cli.rs`, `src/main.rs`, `src/mcp/mod.rs`, `Cargo.toml`, `tests/mcp_server.rs`
+  - **Verify**: `cargo test --test mcp_server`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`.
+
+### Phase 12 Checkpoint
+
+```bash
+cargo test mcp::
+cargo test --test mcp_server
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -689,6 +753,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 | **Hermetic Tests** | All modules offline on `127.0.0.1:0` | `cargo test` |
 | **Feature Gating** | Build minimal without default features | `cargo check --no-default-features --features http` |
 | **Protocol Gating** | Build individual protocols | `cargo check --no-default-features --features <proto>` |
+| **MCP Server** | Hermetic duplex JSON-RPC 2.0 tests | `cargo test --test mcp_server` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
