@@ -757,7 +757,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 **Goal**: Expose Betterh capabilities as a standards-compliant Model Context Protocol (MCP) server over `stdio` using JSON-RPC 2.0, enabling AI coding agents (Antigravity, Claude, Cursor) and automated orchestration pipelines to run safe pre-flight audits, dry-runs, scope validations, and targeted authentication testing with strict guardrails.
 
 ### Tasks
-- [ ] **Task 12.1: MCP Protocol Framing & JSON-RPC 2.0 Transport**
+- [x] **Task 12.1: MCP Protocol Framing & JSON-RPC 2.0 Transport**
   - **Description**: Implement MCP stdio transport (`src/mcp/transport.rs`) over Tokio async stdin/stdout using newline-delimited JSON-RPC 2.0 messages. Support MCP handshake: `initialize` request with client/server capabilities, protocol version negotiation (`2024-11-05`), `notifications/initialized`, `ping`, and clean cancellation. Feature-gated via Cargo feature `mcp`. Zero new external dependencies (uses existing `tokio`, `serde`, `serde_json`).
   - **Acceptance**: Bidirectional async framing passes unit tests; cleanly serializes and deserializes JSON-RPC 2.0 requests, responses, and errors.
   - **Files**: `src/mcp/transport.rs`, `src/mcp/mod.rs`
