@@ -36,6 +36,8 @@ pub enum WordlistError {
     MissingPasswords,
     #[error("Combo rows require a nonempty username followed by ':' and a password")]
     InvalidCombo,
+    #[error(transparent)]
+    Mutation(#[from] crate::engine::mutations::MutationError),
 }
 
 /// A line reader that preserves partially read lines across cancellation.
@@ -180,6 +182,14 @@ pub enum CredentialInput {
     Combos(InputSource),
 }
 
+/// Configuration for wordlist mutations, rules, and mangling.
+#[derive(Debug, Clone, Default)]
+pub struct MutationConfig<'a> {
+    pub mangling: &'a [ManglingRule],
+    pub rule_set: Option<&'a crate::engine::mutations::RuleSet>,
+    pub rule_year: Option<i32>,
+}
+
 /// Generate credentials in the order defined by SPEC section 7.4.
 ///
 /// Files are opened lazily and may be reopened. They must not change during a run.
@@ -192,14 +202,35 @@ pub fn credentials(
     input: CredentialInput,
     rules: &[ManglingRule],
 ) -> Result<CredentialStream, WordlistError> {
-    let rules = normalized_rules(rules);
+    credentials_with_mutations(
+        input,
+        &MutationConfig {
+            mangling: rules,
+            rule_set: None,
+            rule_year: None,
+        },
+    )
+}
+
+/// Generate credentials with full mutation and rule-file interpreter support.
+///
+/// # Errors
+/// Rejects two stdin sources or a product with neither passwords nor rules.
+pub fn credentials_with_mutations(
+    input: CredentialInput,
+    config: &MutationConfig<'_>,
+) -> Result<CredentialStream, WordlistError> {
+    let rules = normalized_rules(config.mangling);
+    let rule_year = config.rule_year;
+    let rule_set = config.rule_set.cloned();
+
     let candidates = match input {
         CredentialInput::Combos(source) => source
             .words()
             .map_ok(move |line| {
                 let parsed = parse_combo(&line);
                 match parsed {
-                    Ok(credential) => mangled(&credential.username, rules)
+                    Ok(credential) => mangled(&credential.username, rules, rule_year)
                         .chain(stream::once(async move { Ok(credential) }))
                         .boxed(),
                     Err(error) => stream::once(async move { Err(error) }).boxed(),
@@ -220,7 +251,7 @@ pub fn credentials(
                 users
                     .clone()
                     .words()
-                    .map_ok(move |user| mangled(&user, rules))
+                    .map_ok(move |user| mangled(&user, rules, rule_year))
                     .try_flatten()
                     .boxed()
             } else {
@@ -228,15 +259,21 @@ pub fn credentials(
             };
             let product = InputSource::Stdin
                 .words()
-                .map_ok(move |password| {
-                    users
-                        .clone()
-                        .words()
-                        .map_ok(move |username| Credential {
+                .map_ok(move |base_password| {
+                    let candidates: Vec<String> = if let Some(ref rs) = rule_set {
+                        rs.apply_to(&base_password).collect()
+                    } else {
+                        vec![base_password]
+                    };
+                    let users = users.clone();
+                    stream::iter(candidates.into_iter().map(move |password| {
+                        let users = users.clone();
+                        users.words().map_ok(move |username| Credential {
                             username,
                             password: Some(password.clone()),
                         })
-                        .boxed()
+                    }))
+                    .flatten()
                 })
                 .try_flatten();
             prelude.chain(product).boxed()
@@ -248,16 +285,29 @@ pub fn credentials(
             users
                 .words()
                 .map_ok(move |user| {
-                    let extra = mangled(&user, rules);
+                    let extra = mangled(&user, rules, rule_year);
+                    let rule_set = rule_set.clone();
                     let supplied = passwords.clone().map_or_else(
                         || stream::empty().boxed(),
-                        |source| {
+                        move |source| {
+                            let user = user.clone();
                             source
                                 .words()
-                                .map_ok(move |password| Credential {
-                                    username: user.clone(),
-                                    password: Some(password),
+                                .map_ok(move |base_password| {
+                                    let user = user.clone();
+                                    let candidates: Vec<String> = if let Some(ref rs) = rule_set {
+                                        rs.apply_to(&base_password).collect()
+                                    } else {
+                                        vec![base_password]
+                                    };
+                                    stream::iter(candidates.into_iter().map(move |password| {
+                                        Ok(Credential {
+                                            username: user.clone(),
+                                            password: Some(password),
+                                        })
+                                    }))
                                 })
+                                .try_flatten()
                                 .boxed()
                         },
                     );
@@ -270,29 +320,66 @@ pub fn credentials(
     Ok(terminal(candidates))
 }
 
-pub(crate) fn normalized_rules(rules: &[ManglingRule]) -> [Option<ManglingRule>; 3] {
-    [
-        ManglingRule::Empty,
-        ManglingRule::Same,
-        ManglingRule::Reverse,
-    ]
-    .map(|rule| rules.contains(&rule).then_some(rule))
+pub(crate) const MANGLING_ORDER: [ManglingRule; 7] = [
+    ManglingRule::Empty,
+    ManglingRule::Same,
+    ManglingRule::Reverse,
+    ManglingRule::Capitalize,
+    ManglingRule::Leet,
+    ManglingRule::Year,
+    ManglingRule::Season,
+];
+
+pub(crate) fn normalized_rules(rules: &[ManglingRule]) -> [Option<ManglingRule>; 7] {
+    MANGLING_ORDER.map(|rule| rules.contains(&rule).then_some(rule))
 }
 
-fn mangled(user: &str, rules: [Option<ManglingRule>; 3]) -> CredentialStream {
+pub(crate) fn mangled(
+    user: &str,
+    rules: [Option<ManglingRule>; 7],
+    rule_year: Option<i32>,
+) -> CredentialStream {
     let user = user.to_owned();
-    stream::iter(rules.into_iter().flatten())
-        .map(move |rule| {
-            Ok(Credential {
-                username: user.clone(),
-                password: Some(match rule {
-                    ManglingRule::Empty => String::new(),
-                    ManglingRule::Same => user.clone(),
-                    ManglingRule::Reverse => user.chars().rev().collect(),
-                }),
-            })
+    let base_year = crate::engine::mutations::resolve_rule_year(rule_year);
+    let mut out: Vec<String> = Vec::new();
+
+    for rule in rules.into_iter().flatten() {
+        match rule {
+            ManglingRule::Empty => {
+                out.push(String::new());
+            }
+            ManglingRule::Same => {
+                out.push(user.clone());
+            }
+            ManglingRule::Reverse => {
+                out.push(user.chars().rev().collect());
+            }
+            ManglingRule::Capitalize => {
+                out.push(crate::engine::mutations::capitalize_first_only(&user));
+            }
+            ManglingRule::Leet => {
+                out.extend(crate::engine::mutations::generate_leet_candidates(&user));
+            }
+            ManglingRule::Year => {
+                out.extend(crate::engine::mutations::generate_year_candidates(
+                    &user, base_year,
+                ));
+            }
+            ManglingRule::Season => {
+                out.extend(crate::engine::mutations::generate_season_candidates(
+                    base_year,
+                ));
+            }
+        }
+    }
+
+    stream::iter(out.into_iter().map(move |pwd| {
+        Ok(Credential {
+            username: user.clone(),
+            password: Some(pwd),
         })
-        .boxed()
+    }))
+    .boxed()
 }
 
 fn parse_combo(line: &str) -> Result<Credential, WordlistError> {
@@ -672,5 +759,77 @@ mod tests {
             InputSource::from_path("-".into()),
             InputSource::Stdin
         ));
+    }
+
+    #[tokio::test]
+    async fn seasonal_and_year_mangling_generates_candidates() {
+        let config = MutationConfig {
+            mangling: &[
+                ManglingRule::Capitalize,
+                ManglingRule::Leet,
+                ManglingRule::Year,
+                ManglingRule::Season,
+            ],
+            rule_set: None,
+            rule_year: Some(2026),
+        };
+        let mut stream = credentials_with_mutations(
+            CredentialInput::Product {
+                users: literal("admin"),
+                passwords: None,
+            },
+            &config,
+        )
+        .expect("valid stream");
+
+        let mut passwords = Vec::new();
+        while let Some(item) = stream.next().await {
+            passwords.push(item.expect("valid").password.unwrap_or_default());
+        }
+
+        assert!(passwords.contains(&"Admin".to_string()));
+        assert!(passwords.contains(&"@dm1n".to_string()));
+        assert!(passwords.contains(&"admin2026!".to_string()));
+        assert!(passwords.contains(&"Winter2026!".to_string()));
+        assert!(passwords.contains(&"Sommer2026#".to_string()));
+    }
+
+    #[tokio::test]
+    async fn mutates_password_stream_lazily_with_ruleset() {
+        let rules_content = "
+            c
+            $!
+            u
+        ";
+        let rule_set: crate::engine::mutations::RuleSet =
+            rules_content.parse().expect("valid rules");
+        let config = MutationConfig {
+            mangling: &[],
+            rule_set: Some(&rule_set),
+            rule_year: None,
+        };
+
+        let mut stream = credentials_with_mutations(
+            CredentialInput::Product {
+                users: literal("alice"),
+                passwords: Some(literal("summer")),
+            },
+            &config,
+        )
+        .expect("valid stream");
+
+        let mut passwords = Vec::new();
+        while let Some(item) = stream.next().await {
+            passwords.push(item.expect("valid").password.unwrap_or_default());
+        }
+
+        assert_eq!(
+            passwords,
+            vec![
+                "Summer".to_string(),
+                "summer!".to_string(),
+                "SUMMER".to_string()
+            ]
+        );
     }
 }

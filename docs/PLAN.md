@@ -816,7 +816,6 @@ cargo fmt --check
 
 ---
 
-<<<<<<< Updated upstream
 ## Phase 14: Post-Expansion Refactoring & Deduplication
 
 **Goal**: After the protocol expansion (Phases 8–13), systematically remove duplication and structural debt from many near-parallel modules—without speculative abstractions. Prefer extracting only helpers used ≥2 times; keep Apollo/Tokio rules (borrow over clone, no locks across await, bounded spawning). Phase 6 covered the early core; Phase 14 targets post-SMTP/DB/infra/enterprise growth. May run interleaved with Phase 12/13 implementation as modules land.

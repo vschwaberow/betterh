@@ -205,12 +205,12 @@ impl Rule {
                         });
                     }
                     let num_str: String = chars[num_start..idx].iter().collect();
-                    let n = num_str.parse::<usize>().map_err(|_| {
-                        MutationError::InvalidRule {
+                    let n = num_str
+                        .parse::<usize>()
+                        .map_err(|_| MutationError::InvalidRule {
                             line: line_num,
                             reason: format!("Invalid length threshold '{num_str}'"),
-                        }
-                    })?;
+                        })?;
                     if is_shorter {
                         ops.push(RuleOp::RejectShorter(n));
                     } else {
@@ -624,7 +624,9 @@ mod tests {
 
     #[test]
     fn parses_and_executes_hashcat_rule_ops() {
-        let rule = Rule::parse("c $! $1", 1).expect("valid rule").expect("some");
+        let rule = Rule::parse("c $! $1", 1)
+            .expect("valid rule")
+            .expect("some");
         assert_eq!(rule.apply("password"), Some("Password!1".into()));
 
         let lower = Rule::parse("l", 2).expect("valid").expect("some");
@@ -682,12 +684,7 @@ mod tests {
         assert_eq!(ruleset.len(), 4);
 
         let results: Vec<String> = ruleset.apply_to("admin").collect();
-        assert_eq!(results, vec![
-            "admin",
-            "Admin!",
-            "ADMIN",
-            "1admin!",
-        ]);
+        assert_eq!(results, vec!["admin", "Admin!", "ADMIN", "1admin!",]);
     }
 
     #[test]

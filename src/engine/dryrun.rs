@@ -18,7 +18,7 @@ use crate::engine::proxy::{ProxyError, ProxyPool};
 use crate::engine::scope::{Scope, ScopeDecision, ScopeError};
 use crate::engine::targets::{TargetError, expand};
 use crate::engine::wordlist::{
-    CredentialInput, InputSource, Wordlist, WordlistError, credentials, normalized_rules,
+    CredentialInput, InputSource, Wordlist, WordlistError, credentials, mangled, normalized_rules,
 };
 use crate::protocols::Target;
 
@@ -186,13 +186,23 @@ async fn count_combinations(
         return Ok((0, 0, count));
     }
 
-    let mangling = u64::try_from(
-        normalized_rules(&cli.mangling)
-            .into_iter()
-            .flatten()
-            .count(),
-    )
-    .unwrap_or(u64::MAX);
+    let rule_year = cli.rule_year;
+    let mangling_rules = normalized_rules(&cli.mangling);
+    let mangling_per_user = if mangling_rules.iter().any(Option::is_some) {
+        let sample = cli
+            .username
+            .as_deref()
+            .or(input.username.as_deref())
+            .unwrap_or("user");
+        let mut count = 0u64;
+        let mut stream = mangled(sample, mangling_rules, rule_year);
+        while stream.next().await.is_some() {
+            count = count.saturating_add(1);
+        }
+        count
+    } else {
+        0
+    };
 
     let users = if let Some(path) = &cli.user_list {
         count_source(InputSource::from_path(path.clone())).await?
@@ -206,13 +216,27 @@ async fn count_combinations(
         count_source(InputSource::from_path(path.clone())).await?
     } else if let Some(password) = &cli.password {
         count_source(InputSource::Single(password.clone())).await?
-    } else if mangling == 0 {
+    } else if mangling_per_user == 0 {
         return Err(DryRunError::MissingCredentials);
     } else {
         0
     };
 
-    let passwords = base_passwords.saturating_add(mangling);
+    let rule_set = cli
+        .rules_file
+        .as_deref()
+        .map(crate::engine::mutations::RuleSet::from_file)
+        .transpose()
+        .map_err(|e| DryRunError::Wordlist(WordlistError::from(e)))?;
+    let rule_multiplier = u64::try_from(
+        rule_set
+            .as_ref()
+            .map_or(1, |rs| if rs.is_empty() { 1 } else { rs.len() }),
+    )
+    .unwrap_or(u64::MAX);
+
+    let effective_base_passwords = base_passwords.saturating_mul(rule_multiplier);
+    let passwords = effective_base_passwords.saturating_add(mangling_per_user);
     let combinations = users.saturating_mul(passwords);
     Ok((users, passwords, combinations))
 }

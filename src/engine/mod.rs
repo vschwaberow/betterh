@@ -38,5 +38,6 @@ pub use request_guard::{GuardError, RequestGuard, StopReason};
 pub use runner::{RunError, run_attack};
 pub use spray::{SprayConfig, SprayRound, run_spray};
 pub use wordlist::{
-    CredentialInput, CredentialStream, InputSource, Wordlist, WordlistError, credentials,
+    CredentialInput, CredentialStream, InputSource, MutationConfig, Wordlist, WordlistError,
+    credentials, credentials_with_mutations,
 };

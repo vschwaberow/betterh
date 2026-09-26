@@ -110,6 +110,14 @@ pub enum ManglingRule {
     Same,
     #[value(name = "r")]
     Reverse,
+    #[value(name = "y")]
+    Year,
+    #[value(name = "c")]
+    Season,
+    #[value(name = "l")]
+    Leet,
+    #[value(name = "C")]
+    Capitalize,
 }
 
 #[derive(Debug, Subcommand)]
@@ -194,9 +202,15 @@ pub struct Cli {
     /// username:password file, or - for stdin.
     #[arg(short = 'C')]
     pub combo_list: Option<PathBuf>,
-    /// Extra password candidates: n (empty), s (username), r (reversed username).
+    /// Extra password candidates: n (empty), s (username), r (reversed username), y (year), c (season), l (leet), C (capitalize).
     #[arg(short = 'e', value_enum, value_delimiter = ',')]
     pub mangling: Vec<ManglingRule>,
+    /// Base year for seasonal and year mangling (defaults to current system UTC year).
+    #[arg(long = "rule-year")]
+    pub rule_year: Option<i32>,
+    /// Hashcat-compatible rule file for password mutation.
+    #[arg(long = "rules")]
+    pub rules_file: Option<PathBuf>,
     #[arg(long, value_enum, default_value = "brute-force")]
     pub mode: AttackMode,
     #[arg(long, value_parser = parse_duration, default_value = "15m")]
