@@ -21,7 +21,7 @@ use crate::engine::scope::{Scope, ScopeDecision};
 use crate::protocols::Target;
 
 /// Lightweight MCP-side session snapshot for `session_status`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ToolRuntime {
     /// Last tool name successfully or unsuccessfully invoked.
@@ -30,6 +30,10 @@ pub struct ToolRuntime {
     pub last_ok: bool,
     /// Findings recorded by the last successful `audit_execute`.
     pub findings: u64,
+    /// Attempt counter exposed via `betterh://session/current`.
+    pub attempts: u64,
+    /// Approximate attempts/sec for live session metrics.
+    pub rate_per_sec: f64,
     /// High-level phase label.
     pub phase: SessionPhase,
 }
@@ -462,6 +466,8 @@ async fn call_session_status(
         "last_tool": runtime.last_tool,
         "last_ok": runtime.last_ok,
         "findings": runtime.findings,
+        "attempts": runtime.attempts,
+        "rate_per_sec": runtime.rate_per_sec,
         "checkpoint": checkpoint,
     })))
 }
@@ -607,7 +613,7 @@ fn scope_decision_name(decision: ScopeDecision) -> &'static str {
     }
 }
 
-fn list_protocols_payload() -> Value {
+pub(crate) fn list_protocols_payload() -> Value {
     let mut protocols = Vec::new();
     push_protocol(&mut protocols, "ftp", 21, cfg!(feature = "ftp"));
     push_protocol(&mut protocols, "ssh", 22, cfg!(feature = "ssh"));
@@ -625,7 +631,7 @@ fn list_protocols_payload() -> Value {
     json!({ "protocols": protocols })
 }
 
-fn push_protocol(out: &mut Vec<Value>, name: &str, default_port: u16, enabled: bool) {
+pub(crate) fn push_protocol(out: &mut Vec<Value>, name: &str, default_port: u16, enabled: bool) {
     out.push(json!({
         "name": name,
         "default_port": default_port,
@@ -816,6 +822,8 @@ mod tests {
             last_tool: Some("list_protocols".into()),
             last_ok: true,
             findings: 0,
+            attempts: 0,
+            rate_per_sec: 0.0,
             phase: SessionPhase::Idle,
         };
         let cancel = CancellationToken::new();

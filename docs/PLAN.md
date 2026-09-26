@@ -775,7 +775,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
   - **Files**: `src/mcp/tools.rs`, `src/mcp/mod.rs`
   - **Verify**: Unit tests for schema validity and simulated tool execution.
 
-- [ ] **Task 12.3: MCP Resources & Secure Session / Finding Reporting**
+- [x] **Task 12.3: MCP Resources & Secure Session / Finding Reporting**
   - **Description**: Implement `resources/list` and `resources/read` in `src/mcp/resources.rs`:
     - `betterh://protocols`: Static registry metadata of compiled protocol capabilities.
     - `betterh://reports/{hash}`: Finding logs from completed or checkpointed audits.

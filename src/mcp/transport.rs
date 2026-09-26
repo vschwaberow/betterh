@@ -11,6 +11,10 @@ use thiserror::Error;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use super::resources::{SessionMetrics, list_resources, read_resource};
 use super::tools::{self, ToolRuntime, call_tool};
 
 /// MCP protocol version negotiated during `initialize`.
@@ -216,7 +220,7 @@ impl InitializeResult {
             protocol_version: PROTOCOL_VERSION.into(),
             capabilities: ServerCapabilities {
                 tools: Some(serde_json::json!({ "listChanged": false })),
-                resources: None,
+                resources: Some(serde_json::json!({ "subscribe": false, "listChanged": false })),
             },
             server_info: Implementation {
                 name: SERVER_NAME.into(),
@@ -311,11 +315,13 @@ where
     }
 }
 
-/// Stateful MCP handshake handler (`initialize` / `initialized` / `ping` / tools).
+/// Stateful MCP handshake handler (`initialize` / `initialized` / `ping` / tools / resources).
 #[derive(Debug, Clone)]
 pub struct McpSession {
     state: SessionState,
     runtime: ToolRuntime,
+    metrics: Arc<SessionMetrics>,
+    report_base: PathBuf,
 }
 
 impl Default for McpSession {
@@ -331,7 +337,16 @@ impl McpSession {
         Self {
             state: SessionState::WaitingInitialize,
             runtime: ToolRuntime::default(),
+            metrics: Arc::new(SessionMetrics::new()),
+            report_base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         }
+    }
+
+    /// Override the directory used to discover and read session report files.
+    #[must_use]
+    pub fn with_report_base(mut self, path: PathBuf) -> Self {
+        self.report_base = path;
+        self
     }
 
     /// Current lifecycle state.
@@ -344,6 +359,12 @@ impl McpSession {
     #[must_use]
     pub const fn runtime(&self) -> &ToolRuntime {
         &self.runtime
+    }
+
+    /// Shared live session metrics for `betterh://session/current`.
+    #[must_use]
+    pub fn metrics(&self) -> Arc<SessionMetrics> {
+        Arc::clone(&self.metrics)
     }
 
     /// Parse a raw JSON value into a request or notification.
@@ -448,6 +469,8 @@ impl McpSession {
             "ping" => self.handle_ping(request),
             "tools/list" => self.handle_tools_list(request),
             "tools/call" => self.handle_tools_call(request, cancel).await,
+            "resources/list" => self.handle_resources_list(request).await,
+            "resources/read" => self.handle_resources_read(request).await,
             other => JsonRpcResponse::error(
                 request.id,
                 JsonRpcError::new(
@@ -608,6 +631,77 @@ impl McpSession {
                     ),
                 }
             }
+        }
+    }
+
+    async fn handle_resources_list(&self, request: JsonRpcRequest) -> JsonRpcResponse {
+        if self.state != SessionState::Ready {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(
+                    error_code::INVALID_REQUEST,
+                    "resources/list requires an initialized session",
+                ),
+            );
+        }
+        match list_resources(&self.report_base).await {
+            Ok(resources) => {
+                match serde_json::to_value(serde_json::json!({ "resources": resources })) {
+                    Ok(value) => JsonRpcResponse::result(request.id, value),
+                    Err(err) => JsonRpcResponse::error(
+                        request.id,
+                        JsonRpcError::new(
+                            error_code::INTERNAL_ERROR,
+                            format!("failed to encode resources/list: {err}"),
+                        ),
+                    ),
+                }
+            }
+            Err(err) => JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, err.to_string()),
+            ),
+        }
+    }
+
+    async fn handle_resources_read(&self, request: JsonRpcRequest) -> JsonRpcResponse {
+        if self.state != SessionState::Ready {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(
+                    error_code::INVALID_REQUEST,
+                    "resources/read requires an initialized session",
+                ),
+            );
+        }
+        let Some(params) = request.params else {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, "resources/read requires params"),
+            );
+        };
+        let Some(uri) = params.get("uri").and_then(Value::as_str) else {
+            return JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, "resources/read requires uri"),
+            );
+        };
+        match read_resource(uri, &self.runtime, &self.metrics, &self.report_base).await {
+            Ok(content) => match serde_json::to_value(serde_json::json!({ "contents": [content] }))
+            {
+                Ok(value) => JsonRpcResponse::result(request.id, value),
+                Err(err) => JsonRpcResponse::error(
+                    request.id,
+                    JsonRpcError::new(
+                        error_code::INTERNAL_ERROR,
+                        format!("failed to encode resources/read: {err}"),
+                    ),
+                ),
+            },
+            Err(err) => JsonRpcResponse::error(
+                request.id,
+                JsonRpcError::new(error_code::INVALID_PARAMS, err.to_string()),
+            ),
         }
     }
 
