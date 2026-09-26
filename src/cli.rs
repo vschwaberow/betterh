@@ -29,6 +29,11 @@ pub enum Service {
     Smtps,
     Mysql,
     Postgres,
+    Redis,
+    Imap,
+    Imaps,
+    Ldap,
+    Ldaps,
 }
 
 impl Service {
@@ -43,6 +48,11 @@ impl Service {
             Self::Smtps => 465,
             Self::Mysql => 3306,
             Self::Postgres => 5432,
+            Self::Redis => 6379,
+            Self::Imap => 143,
+            Self::Imaps => 993,
+            Self::Ldap => 389,
+            Self::Ldaps => 636,
         }
     }
 
@@ -52,6 +62,23 @@ impl Service {
 
     const fn is_database(self) -> bool {
         matches!(self, Self::Mysql | Self::Postgres)
+    }
+
+    pub(crate) const fn uses_ssl(self) -> bool {
+        matches!(self, Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps)
+    }
+
+    pub(crate) const fn allows_insecure(self) -> bool {
+        matches!(
+            self,
+            Self::Https
+                | Self::Smtp
+                | Self::Smtps
+                | Self::Imap
+                | Self::Imaps
+                | Self::Ldap
+                | Self::Ldaps
+        )
     }
 }
 
@@ -305,10 +332,14 @@ impl Cli {
                 || !module.headers.is_empty()
                 || module.http_method.is_some()
                 || module.cookie.is_some()
-                || module.insecure
                 || self.settings.user_agent.is_some())
         {
             return Err(invalid("HTTP options require an http or https target"));
+        }
+        if module.insecure && !service.allows_insecure() {
+            return Err(invalid(
+                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps)",
+            ));
         }
         if module.ssh_key.is_some() && service != Service::Ssh {
             return Err(invalid("--ssh-key requires an ssh target"));
@@ -349,8 +380,13 @@ fn parse_service(value: &str) -> Result<Service, clap::Error> {
         "smtps" => Ok(Service::Smtps),
         "mysql" => Ok(Service::Mysql),
         "postgres" | "postgresql" => Ok(Service::Postgres),
+        "redis" => Ok(Service::Redis),
+        "imap" => Ok(Service::Imap),
+        "imaps" => Ok(Service::Imaps),
+        "ldap" => Ok(Service::Ldap),
+        "ldaps" => Ok(Service::Ldaps),
         _ => Err(invalid(
-            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql)",
+            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps",
         )),
     }
 }
@@ -401,7 +437,7 @@ pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
         source: TargetSource::Single(Target {
             host,
             port,
-            ssl: service == Service::Https || service == Service::Smtps,
+            ssl: service.uses_ssl(),
             path,
             ip,
         }),
@@ -423,6 +459,11 @@ pub(crate) fn parse_positional(service: Service, value: &str) -> Result<TargetSo
         Service::Smtps => "smtps",
         Service::Mysql => "mysql",
         Service::Postgres => "postgres",
+        Service::Redis => "redis",
+        Service::Imap => "imap",
+        Service::Imaps => "imaps",
+        Service::Ldap => "ldap",
+        Service::Ldaps => "ldaps",
     };
     Ok(parse_url(&format!("{scheme}://{host}"))?.source)
 }
@@ -536,6 +577,11 @@ mod tests {
             ("mysql", 3306),
             ("postgres", 5432),
             ("postgresql", 5432),
+            ("redis", 6379),
+            ("imap", 143),
+            ("imaps", 993),
+            ("ldap", 389),
+            ("ldaps", 636),
         ] {
             let TargetSource::Single(target) = input(&["betterh", service, "::1"]).source else {
                 panic!()

@@ -317,6 +317,11 @@ fn service_name(service: Service) -> &'static str {
         Service::Smtps => "smtps",
         Service::Mysql => "mysql",
         Service::Postgres => "postgres",
+        Service::Redis => "redis",
+        Service::Imap => "imap",
+        Service::Imaps => "imaps",
+        Service::Ldap => "ldap",
+        Service::Ldaps => "ldaps",
     }
 }
 
@@ -330,6 +335,10 @@ fn session_hash(service: Service, cli: &Cli) -> String {
     format!("{:x}", hasher.finish())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive Service → ProtocolModule registry with feature-gated arms"
+)]
 fn build_module(
     cli: &Cli,
     config: &Config,
@@ -392,6 +401,22 @@ fn build_module(
                 .with_database(cli.module.database.clone())
                 .with_proxy(proxy),
         )),
+        #[cfg(feature = "redis")]
+        Service::Redis => Ok(Arc::new(
+            crate::protocols::RedisModule::new().with_proxy(proxy),
+        )),
+        #[cfg(feature = "imap")]
+        Service::Imap | Service::Imaps => Ok(Arc::new(
+            crate::protocols::ImapModule::new()
+                .with_proxy(proxy)
+                .with_insecure(cli.module.insecure),
+        )),
+        #[cfg(feature = "ldap")]
+        Service::Ldap | Service::Ldaps => Ok(Arc::new(
+            crate::protocols::LdapModule::new()
+                .with_proxy(proxy)
+                .with_insecure(cli.module.insecure),
+        )),
         #[cfg(not(feature = "ftp"))]
         Service::Ftp => Err(RunError::Message(
             "FTP support was not compiled in (enable feature `ftp`)".into(),
@@ -415,6 +440,18 @@ fn build_module(
         #[cfg(not(feature = "postgres"))]
         Service::Postgres => Err(RunError::Message(
             "PostgreSQL support was not compiled in (enable feature `postgres`)".into(),
+        )),
+        #[cfg(not(feature = "redis"))]
+        Service::Redis => Err(RunError::Message(
+            "Redis support was not compiled in (enable feature `redis`)".into(),
+        )),
+        #[cfg(not(feature = "imap"))]
+        Service::Imap | Service::Imaps => Err(RunError::Message(
+            "IMAP support was not compiled in (enable feature `imap`)".into(),
+        )),
+        #[cfg(not(feature = "ldap"))]
+        Service::Ldap | Service::Ldaps => Err(RunError::Message(
+            "LDAP support was not compiled in (enable feature `ldap`)".into(),
         )),
     }
 }
