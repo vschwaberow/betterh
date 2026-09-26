@@ -27,6 +27,7 @@ The release binary is `target/release/betterh`.
 ```bash
 betterh                                  # quickstart help
 betterh wizard                           # guided setup (prints CLI; does not attack)
+betterh mcp                              # Model Context Protocol server (stdio JSON-RPC)
 betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
@@ -67,6 +68,9 @@ betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --r
 # Completions and man page
 eval "$(betterh completions bash)"
 betterh man > betterh.1
+
+# MCP server for agent tooling (initialize / tools / resources over stdio)
+betterh mcp --stdio
 ```
 
 Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, then `./betterh.toml` or `~/.config/betterh/config.toml`.
@@ -82,6 +86,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 | Network | SOCKS5 / HTTP proxies, pacing, jitter, adaptive backoff |
 | Controls | Canary abort, `--exit-user` / `--exit-host` / `--exit-first`, `--on-found`, checkpoints on interrupt |
 | Output | TTY dashboard, JSON / JSONL (files created mode `0600`) |
+| MCP | `betterh mcp` stdio server: `audit_dryrun`, `audit_execute` (confirm-gated), `validate_scope`, `list_protocols`, `session_status`; resources `betterh://protocols`, `betterh://session/current`, `betterh://reports/{hash}` |
 
 ## Develop
 
@@ -91,12 +96,14 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --all-features --locked
 ```
 
-Optional Phase 11 wire prototypes (not production modules):
+Production SMB module and optional Phase 11 RDP wire prototype:
 
 ```bash
-cargo test --features feasibility-smb feasibility::smb
+cargo test --features smb protocols::smb
 cargo test --features feasibility-rdp feasibility::rdp
 ```
+
+`feasibility-smb` re-exports the production SMB codecs (enable feature `smb`).
 
 - Architecture: [`docs/SPEC.md`](docs/SPEC.md)
 - Roadmap: [`docs/PLAN.md`](docs/PLAN.md)
