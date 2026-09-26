@@ -30,7 +30,7 @@ pub use dryrun::{
 pub use keys::{RuntimeCommand, interpret_key, listen as listen_keys};
 pub use mutations::{
     MutationError, Rule, RuleOp, RuleSet, generate_leet_candidates, generate_season_candidates,
-    generate_year_candidates,
+    generate_year_candidates, resolve_rule_year,
 };
 pub use pool::{Attempt, Finding, PoolConfig, PoolError, prepare_target, run_brute};
 pub use proxy::{Pacer, ProxyError, ProxyPool};
