@@ -593,7 +593,7 @@ cargo fmt --check
   - **Files**: `src/protocols/mysql.rs`
   - **Verify**: Hermetic mock tests for `caching_sha2_password` in `src/protocols/mysql.rs`.
 
-- [ ] **Task 9.4: PostgreSQL `SCRAM-SHA-256` SASL Authentication**
+- [x] **Task 9.4: PostgreSQL `SCRAM-SHA-256` SASL Authentication**
   - **Description**: Implement RFC 5802 / RFC 7677 `SCRAM-SHA-256` SASL mechanism using `sha2`, `hmac`, `pbkdf2`. Intercept `'R'` type 10 (`AuthenticationSASL`), exchange client nonce via `SASLInitialResponse`, parse server nonce, salt, and iteration count from `'R'` type 11 (`AuthenticationSASLContinue`), derive keys via PBKDF2 HMAC-SHA256, compute ClientProof, send `SASLResponse`, and verify `'R'` type 12 (`AuthenticationSASLFinal`) / type 0.
   - **Acceptance**: Completes SASL handshake against mock PostgreSQL listener; accurately computes ClientProof.
   - **Files**: `src/protocols/postgres.rs`
