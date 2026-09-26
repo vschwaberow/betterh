@@ -442,10 +442,10 @@ cargo fmt --check
   - **Verify**: File review against GitHub Dependabot schema; CI remains green.
 
 - [x] **Task 7.6: Keep a Changelog**
-  - **Description**: Add root `CHANGELOG.md` (Keep a Changelog + SemVer) and require user-visible PRs to update it. Record the post-init history under `[Unreleased]` and the baseline as `[0.1.0]`.
-  - **Acceptance**: `CHANGELOG.md` exists; README and SPEC project tree link to it; PLAN documents the maintenance rule.
+  - **Description**: Add root `CHANGELOG.md` (Keep a Changelog + SemVer) and require user-visible PRs to update it. Keep all notes under `[Unreleased]` until an actual version is tagged/released.
+  - **Acceptance**: `CHANGELOG.md` exists with only an `[Unreleased]` section until the first release; README and SPEC project tree link to it; PLAN documents the maintenance rule.
   - **Files**: `CHANGELOG.md`, `README.md`, `docs/SPEC.md`, this PLAN entry
-  - **Verify**: Manual review that recent merged PRs (#1–#4) appear under the correct sections.
+  - **Verify**: Manual review that merged history appears under `[Unreleased]` only (no premature version section).
 
 ## Verification Matrix
 

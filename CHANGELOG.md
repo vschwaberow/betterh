@@ -11,20 +11,12 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
-- Project changelog (`CHANGELOG.md`, Keep a Changelog)
+- Project changelog (`CHANGELOG.md`, Keep a Changelog) (#5)
 - Dual-license text files (`LICENSE-MIT`, `LICENSE-APACHE`) (#1)
 - Weekly Dependabot updates for Cargo and GitHub Actions (`.github/dependabot.yml`) (#2)
+- Initial tree: FTP / HTTP / SSH protocols, concurrency engine (scope, canary, spray, pacing, checkpoints), CLI, dry-run, wizard, reporters, hermetic tests, and GitHub Actions CI
 
 ### Changed
 
 - CI checkout Action bumped to `actions/checkout@v7` (#3)
 - Dependency refresh: `indicatif` 0.18, `crossterm` 0.29, `inquire` 0.9, `directories` 6, `toml` 1.1 (#4)
-
-## [0.1.0] - 2026-09-26
-
-### Added
-
-- Initial tree: FTP / HTTP / SSH protocols, concurrency engine (scope, canary, spray, pacing, checkpoints), CLI, dry-run, wizard, reporters, hermetic tests, and GitHub Actions CI
-
-[Unreleased]: https://github.com/vschwaberow/betterh/compare/ba7e0e8...HEAD
-[0.1.0]: https://github.com/vschwaberow/betterh/releases/tag/v0.1.0
