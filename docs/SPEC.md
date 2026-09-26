@@ -16,7 +16,7 @@
 - **Granular Success Controls & Skip Rules**: Smart auto-skip per user (`--exit-user`, default), per host (`--exit-host`), or immediate global stop (`--exit-first`).
 - **Safe Post-Finding Actions**: Shell-injection-safe command execution (`--on-found "<cmd>"` via environment variables) and terminal bell (`--bell`).
 - **Session Checkpointing**: Interruptible and resumable audit sessions written with strict file permissions (`0600`).
-- **Feature-Gated Protocol Modularity**: Compile only what you need via Cargo features (`ftp`, `http`, `ssh`).
+- **Feature-Gated Protocol Modularity**: Compile only what you need via Cargo features (`ftp`, `http`, `ssh`, `smtp`, `mysql`, `postgres`, `redis`, `imap`, `ldap`).
 - **Hermetic Testing Strategy**: 100% in-process mock server testing (`127.0.0.1:0`) without Docker or internet dependencies.
 - **Ergonomic CLI & Configuration**:
   - URL-First & Positional Hybrid syntax (`betterh ssh://user@host:port` or `betterh ssh host:port`).
@@ -58,13 +58,16 @@
 ### Protocol Feature Flags
 ```toml
 [features]
-default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
-smtp = ["dep:base64"]
-mysql = ["dep:sha1"]
-postgres = ["dep:md5"]
+smtp = ["dep:base64", "dep:tokio-rustls"]
+mysql = ["dep:sha1", "dep:sha2"]
+postgres = ["dep:md5", "dep:sha2", "dep:hmac", "dep:pbkdf2"]
+redis = []
+imap = ["dep:tokio-rustls"]
+ldap = ["dep:tokio-rustls"]
 ```
 
 ### Dev Dependencies (Hermetic Testing)
@@ -119,9 +122,11 @@ postgres = ["dep:md5"]
                 |                        |                        |
                 v                        v                        v
        +------------------+     +------------------+     +------------------+
-       |  SSH / FTP / HTTP|     |   SMTP / SMTPS   |     | MySQL / Postgres |
+       |  SSH / FTP / HTTP|     | SMTP / SMTPS /   |     | MySQL / Postgres |
+       |                  |     |       IMAP       |     |  Redis / LDAP    |
        +------------------+     +------------------+     +------------------+
                 |                        |                        |
+                |      [ TransportStream: Plain TCP / TLS ]       |
                 +------------------------+------------------------+
                                          |
                                          v
@@ -259,18 +264,25 @@ pub trait ProtocolModule: Send + Sync {
 - **SSH (`SshModule`, feature = `ssh`)**:
   - `russh` client authentication; supports password and public key authentication.
 
-#### B. Extended Protocols (Phase 8)
+#### B. Extended Protocols (Phase 8 & Phase 9 Hardening)
 - **SMTP / SMTPS (`SmtpModule`, feature = `smtp`)**:
-  - Default ports: `25` (plain / STARTTLS), `587` (submission), `465` (implicit SMTPS).
+  - Default ports: `25` (plain / STARTTLS), `587` (submission / STARTTLS), `465` (implicit SMTPS).
   - Type-state connection (`SmtpClient<Disconnected>` $\to$ `Connected` $\to$ `Greeted`).
   - Greets with `EHLO betterh.local`, inspects `250-AUTH` extensions, and executes `AUTH PLAIN` (preferred single-step) or `AUTH LOGIN` (dual 334 challenge-response).
+  - **Modern STARTTLS Hardening (Phase 9)**: Upgrades plain TCP stream to TLS over `TransportStream` upon observing `250-STARTTLS` on ports 25 and 587. Immediately wraps connection in TLS on port 465 (SMTPS) before banner reading. Supports `--insecure` certificate validation bypass for test environments.
   - Maps 235 to `AuthResult::Success`, 535 to `AuthResult::Failure`, 421/454 to `AuthResult::RateLimited(5s)`, 550 to `AuthResult::LockedOut`.
 - **MySQL (`MysqlModule`, feature = `mysql`)**:
   - Default port: `3306`.
   - Native wire-level implementation of the MySQL Client/Server protocol without external C-bindings or heavy SQL drivers.
   - Parses `HandshakeV10` greeting: extracts protocol version (`0x0a`), server version, connection ID, 8-byte auth-plugin-data part 1, capabilities, and auth-plugin-data part 2 (salt).
-  - Builds `HandshakeResponse41`: encodes client flags, maximum packet size, utf8mb4 collation (`45`), username, and computes `mysql_native_password` scramble:
-    $$\text{scramble} = \text{SHA1}(\text{password}) \oplus \text{SHA1}(\text{salt} \parallel \text{SHA1}(\text{SHA1}(\text{password})))$$
+  - Builds `HandshakeResponse41`: encodes client flags, maximum packet size, utf8mb4 collation (`45`), username.
+  - Authentication plugins:
+    - Legacy `mysql_native_password`:
+      $$\text{scramble} = \text{SHA1}(\text{password}) \oplus \text{SHA1}(\text{salt} \parallel \text{SHA1}(\text{SHA1}(\text{password})))$$
+    - **Modern `caching_sha2_password` Hardening (Phase 9, default in MySQL 8+)**:
+      Computes SHA-256 double-hash scramble:
+      $$\text{scramble} = \text{SHA256}(\text{password}) \oplus \text{SHA256}(\text{SHA256}(\text{SHA256}(\text{password})) \parallel \text{salt})$$
+      Evaluates fast authentication: packet `0x00` OK $\to$ fast-cache hit (`AuthResult::Success`); packet `0x01, 0x03` (perform full authentication) $\to$ submits password over TLS connection or requests server RSA public key (`0x02`) and encrypts password using RSA-OAEP.
   - Decodes response: `0x00` OK packet $\to$ `AuthResult::Success`; `0xFF` ERR packet code 1045 $\to$ `AuthResult::Failure`; code 1129 (host blocked) or 1040 (too many connections) $\to$ `AuthResult::RateLimited`.
 - **PostgreSQL (`PostgresModule`, feature = `postgres`)**:
   - Default port: `5432`.
@@ -283,7 +295,57 @@ pub trait ProtocolModule: Send + Sync {
       $$\text{hash}_1 = \text{hex}(\text{MD5}(\text{password} \parallel \text{username}))$$
       $$\text{hash}_2 = \text{hex}(\text{MD5}(\text{hash}_1 \parallel \text{salt}))$$
       Sends `'p'` message with `"md5"` prefix followed by $\text{hash}_2$.
+    - **Modern `SCRAM-SHA-256` Hardening (Phase 9, default in PostgreSQL 10+)**:
+      - Intercepts `'R'` type 10 (`AuthenticationSASL`) announcing `SCRAM-SHA-256`.
+      - Generates client nonce $r_{\text{client}}$ and transmits `SASLInitialResponse` (`'p'`) with `n,,n={username},r={client_nonce}`.
+      - Receives `'R'` type 11 (`AuthenticationSASLContinue`), parses server nonce $r_{\text{server}}$, salt $s$, and iteration count $i$.
+      - Computes SaltedPassword via PBKDF2 HMAC-SHA256, derives ClientKey, StoredKey, and ClientProof = $\text{ClientKey} \oplus \text{HMAC}(\text{StoredKey}, \text{AuthMessage})$.
+      - Transmits `SASLResponse` (`'p'`) with `c=biws,r=...,p=...`.
+      - Receives `'R'` type 12 (`AuthenticationSASLFinal`) verifying server signature followed by `'R'` type 0 (`AuthenticationOk`).
   - Decodes `'E'` ErrorResponse: parses SQLSTATE fields; `28P01` / `28000` $\to$ `AuthResult::Failure`; `53300` (too many connections) $\to$ `AuthResult::RateLimited(5s)`.
+
+#### C. Extended Infrastructure & Directory Protocols (Phase 10)
+- **Redis (`RedisModule`, feature = `redis`)**:
+  - Default port: `6379`.
+  - Pure wire-level implementation of the REdis Serialization Protocol (RESP).
+  - Canary & probe: sends `PING\r\n` $\to$ expects `+PONG\r\n` (no auth required) or `-NOAUTH` (auth required).
+  - Authentication modes:
+    - Redis 2.x–5.x inline authentication: `AUTH <password>\r\n`.
+    - Redis 6.0+ ACL authentication: `AUTH <username> <password>\r\n` when username is specified.
+  - Status code mapping:
+    - `+OK\r\n` $\to$ `AuthResult::Success`.
+    - `-WRONGPASS`, `-ERR invalid password`, `-ERR invalid username-password` $\to$ `AuthResult::Failure`.
+    - `-ERR max number of clients reached` $\to$ `AuthResult::RateLimited(5s)`.
+- **IMAP / IMAPS (`ImapModule`, feature = `imap`)**:
+  - Default ports: `143` (plain / STARTTLS), `993` (implicit IMAPS).
+  - RFC 3501 IMAP4rev1 tagged text dialogue:
+    - Reads greeting banner: `* OK [CAPABILITY ...]`.
+    - STARTTLS upgrade: sends `A001 STARTTLS\r\n`, receives `A001 OK`, and upgrades TCP stream via `TransportStream`. For port 993, wraps in TLS immediately on connect.
+    - Authentication attempt: sends `A002 LOGIN "<username>" "<password>"\r\n` (with quoted-string escaping for special characters).
+    - Status code mapping:
+      - `A002 OK` $\to$ `AuthResult::Success`.
+      - `A002 NO` $\to$ `AuthResult::Failure`.
+      - `* BYE` (rate limit / connection drop) $\to$ `AuthResult::RateLimited(5s)`.
+    - Clean teardown: sends `A003 LOGOUT\r\n`.
+- **LDAP / LDAPS (`LdapModule`, feature = `ldap`)**:
+  - Default ports: `389` (plain / StartTLS), `636` (implicit LDAPS).
+  - Pure wire-level RFC 4511 Lightweight Directory Access Protocol (LDAPv3) using lightweight ASN.1 BER encoding.
+  - Constructs `BindRequest` PDU:
+    - Message ID (e.g. `1`), protocol version `3`.
+    - Bind DN / principal name (e.g., `CN=Administrator,CN=Users,DC=corp,DC=local` or UPN `user@corp.local`).
+    - Simple authentication password choice tag (`[CONTEXT 0]`).
+  - Decodes `BindResponse` PDU:
+    - Extracts `resultCode` ENUMERATED value.
+    - Code `0` (`success`) $\to$ `AuthResult::Success`.
+    - Code `49` (`invalidCredentials`) $\to$ `AuthResult::Failure`.
+    - Code `53` (`unwillingToPerform` / account lockout) $\to$ `AuthResult::LockedOut`.
+    - Code `51` (`busy`) $\to$ `AuthResult::RateLimited(5s)`.
+
+#### D. Enterprise Protocol Feasibility & Architecture Track (Phase 11)
+- **SMBv2/v3 & RDP Feasibility Analysis**:
+  - SMBv2/v3 (TCP port 445): Requires NetBIOS framing (`0x00` length prefix), SMB2 Header (`0xFE 'SMB'`), NEGOTIATE dialogue, and SPNEGO / NTLMSSP Type 1 (Negotiate), Type 2 (Challenge), and Type 3 (Authenticate) calculation using NTLMv2 hashes.
+  - RDP (TCP port 3389): Requires ISO TPKT (RFC 1006) framing, X.224 Connection Request (`CR`), Negotiation Request (`RDP_NEG_REQ`), TLS upgrade, CredSSP framing, and NLA (Network Level Authentication) containing SPNEGO/NTLMv2 tokens.
+  - Architectural Boundary: Kept in a dedicated feasibility and prototyping phase to prevent bloated C-dependencies or unstable external crates while evaluating clean, pure Rust native framing.
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
@@ -450,6 +512,9 @@ impl ProtocolClient<Connected> {
   - **SMTP**: Parse RFC 5321 multiline reply continuations (`250-` followed by `250 ` termination); accept bare LF delimiters from legacy embedded servers; tolerate arbitrary extension announcements; support both single-step `AUTH PLAIN` and two-step `AUTH LOGIN`.
   - **MySQL**: Read packet framing (3-byte length + sequence ID); consume HandshakeV10 auth data splits; handle MySQL 5.x and 8.x error codes (1045 access denied, 1129 host blocked, 1040 connection limit).
   - **PostgreSQL**: Frame Protocol 3.0 messages; negotiate cleartext and MD5 salted challenges; parse ErrorResponse SQLSTATE fields (`28P01`, `28000`, `53300`).
+  - **Redis**: Resiliently parse RESP simple strings (`+`), bulk strings (`$`), and errors (`-`); handle varied server error prefixes without desynchronization.
+  - **IMAP**: Resiliently consume untagged server alerts (`*`), capability lists, and arbitrary tagged response prefixes; handle trailing CRLF/LF variations.
+  - **LDAP**: Parse variable-length ASN.1 BER length encodings (short form $\le 127$ and long form multibyte); handle server diagnostic messages following result codes.
   - **Transport Resilience**: Distinguish transient transport resets from explicit protocol rejections; never drop connection state on transient TCP resets without attempting recovery.
 
 ---
@@ -564,7 +629,7 @@ wordlist_paths = ["/usr/share/wordlists/rockyou.txt"]
 #### Foundation Parsing and Configuration Rules
 
 - The CLI entrypoint (`main.rs`) validates invocations, runs `--dry-run` audits, and dispatches live attacks through `engine::runner` (scope → canary → `prepare_target` → brute/spray pool → session reporter). Wizard/completions/man remain non-attack paths: the wizard only prints the equivalent CLI argv and confirms that no authentication attempts were sent.
-- Services are `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, and `postgres` (or `postgresql`); HTTP authentication selects `-m basic`, `-m post-form`, or `-m bearer` (default `basic`). Cargo protocol features control implementations, not parsing. Default ports are FTP (21), SSH (22), HTTP (80), HTTPS (443), SMTP (25), SMTPS (465), MySQL (3306), and PostgreSQL (5432).
+- Services are `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (or `postgresql`), `redis`, `imap`, `imaps`, `ldap`, and `ldaps`; HTTP authentication selects `-m basic`, `-m post-form`, or `-m bearer` (default `basic`). Cargo protocol features control implementations, not parsing. Default ports are FTP (21), SSH (22), HTTP (80), HTTPS (443), SMTP (25), SMTPS (465), MySQL (3306), PostgreSQL (5432), Redis (6379), IMAP (143), IMAPS (993), LDAP (389), and LDAPS (636).
 - URL usernames are percent-decoded. `-u` overrides the embedded user; `-L` replaces it with a list. Embedded passwords and URL fragments are rejected. HTTP paths retain the query string. IPv6 positional addresses require brackets when a port is supplied.
 - `-C` accepts a combo list and conflicts with separate username/password sources. Both lists cannot consume stdin simultaneously. CIDR expansion and target-file reading belong to Phase 3.
 - Duration flags accept whole numbers with `ms`, `s`, `m`, or `h` suffixes. Concurrency, timeout, and request interval must be positive.
@@ -629,11 +694,15 @@ betterh/
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests
     │   ├── ftp.rs            # FTP raw TCP module (feature = "ftp")
     │   ├── http.rs           # HTTP module (feature = "http")
+    │   ├── imap.rs           # IMAP/IMAPS RFC 3501 module (feature = "imap")
+    │   ├── ldap.rs           # LDAP/LDAPS RFC 4511 module (feature = "ldap")
     │   ├── mysql.rs          # MySQL native wire module (feature = "mysql")
     │   ├── postgres.rs       # PostgreSQL 3.0 wire module (feature = "postgres")
-    │   ├── smtp.rs           # SMTP AUTH PLAIN/LOGIN module (feature = "smtp")
+    │   ├── redis.rs          # Redis RESP module (feature = "redis")
+    │   ├── smtp.rs           # SMTP AUTH PLAIN/LOGIN/STARTTLS module (feature = "smtp")
     │   ├── socks.rs          # Shared SOCKS5 dial helper
-    │   └── ssh.rs            # SSH module (feature = "ssh")
+    │   ├── ssh.rs            # SSH module (feature = "ssh")
+    │   └── tls.rs            # Shared TLS TransportStream & rustls helper
     ├── report/               # Reporting & formatters
     │   ├── mod.rs
     │   ├── jsonl.rs          # JSON / JSONL streaming output (0600)
