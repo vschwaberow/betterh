@@ -454,7 +454,7 @@ cargo fmt --check
 **Goal**: Expand protocol coverage to enterprise database and mail services with native wire-level implementations, zero-allocation credential handling, robust error mapping, and hermetic in-process test harnesses.
 
 ### Tasks
-- [ ] **Task 8.1: SMTP Protocol Module & In-Process Test Harness**
+- [x] **Task 8.1: SMTP Protocol Module & In-Process Test Harness**
   - **Description**: Implement `SmtpModule` (feature = `smtp`, dependency = `base64`) supporting:
     - Default ports: 25 (SMTP/STARTTLS), 587 (Submission), 465 (SMTPS).
     - Type-state connection management (`SmtpClient<Disconnected>` $\to$ `Connected` $\to$ `Greeted`).
@@ -466,7 +466,7 @@ cargo fmt --check
   - **Files**: `src/protocols/smtp.rs`, `src/protocols/mod.rs`
   - **Verify**: Mock tests in `src/protocols/smtp.rs` testing multiline banners, PLAIN and LOGIN paths, and error codes.
 
-- [ ] **Task 8.2: MySQL Protocol Module & In-Process Test Harness**
+- [x] **Task 8.2: MySQL Protocol Module & In-Process Test Harness**
   - **Description**: Implement `MysqlModule` (feature = `mysql`, dependency = `sha1`) supporting:
     - Default port: 3306.
     - Native wire-level codec for MySQL 4-byte packet framing (3-byte length + sequence ID).
@@ -479,7 +479,7 @@ cargo fmt --check
   - **Files**: `src/protocols/mysql.rs`, `src/protocols/mod.rs`
   - **Verify**: Hermetic in-process mock server tests in `src/protocols/mysql.rs`.
 
-- [ ] **Task 8.3: PostgreSQL Protocol Module & In-Process Test Harness**
+- [x] **Task 8.3: PostgreSQL Protocol Module & In-Process Test Harness**
   - **Description**: Implement `PostgresModule` (feature = `postgres`, dependency = `md5`) supporting:
     - Default port: 5432.
     - Frontend/Backend Protocol 3.0 message framing (1-byte type + 4-byte big-endian length).
@@ -494,7 +494,7 @@ cargo fmt --check
   - **Files**: `src/protocols/postgres.rs`, `src/protocols/mod.rs`
   - **Verify**: Hermetic in-process mock server tests in `src/protocols/postgres.rs`.
 
-- [ ] **Task 8.4: Extended Protocol Wiring, CLI Options & Integration Tests**
+- [x] **Task 8.4: Extended Protocol Wiring, CLI Options & Integration Tests**
   - **Description**: Wire extended protocols into the application CLI and runner engine:
     - Add `Smtp`, `Smtps`, `Mysql`, `Postgres` to `Service` enum in `src/cli.rs`.
     - Register default ports and URL schemes (`smtp://`, `smtps://`, `mysql://`, `postgres://`, `postgresql://`).
@@ -507,6 +507,16 @@ cargo fmt --check
   - **Verify**: `cargo test`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`.
 
 ### Phase 8 Checkpoint
+
+Completed (2026-09-26) on `feat/phase-8-extended-protocols`: Tasks 8.1–8.4 are implemented
+(`SmtpModule` with PLAIN/LOGIN and RFC 5321 multiline parsing, `MysqlModule` with 4-byte wire framing,
+`HandshakeV10` parsing and `mysql_native_password` scramble, `PostgresModule` with Frontend/Backend 3.0
+and MD5 salted challenges, CLI `--database` option and URL parsing, and runner engine wiring).
+
+Verification: 201 tests passed across unit and integration suites.
+`cargo check --no-default-features --features <proto>` verifies clean independent compilation.
+`cargo fmt --check` and `cargo clippy --all-targets --all-features --locked -- -D warnings` passed with 0 warnings.
+
 ```bash
 cargo test protocols::smtp protocols::mysql protocols::postgres
 cargo test --all-targets --all-features --locked

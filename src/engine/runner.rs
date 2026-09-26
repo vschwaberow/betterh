@@ -10,7 +10,9 @@ use thiserror::Error;
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 
-use crate::cli::{AttackMode, Cli, HttpAuth, Service, TargetInput};
+#[cfg(feature = "http")]
+use crate::cli::HttpAuth;
+use crate::cli::{AttackMode, Cli, Service, TargetInput};
 use crate::config::Config;
 use crate::engine::canary::{self, CanaryError};
 use crate::engine::scope::{Scope, ScopeError};
@@ -311,6 +313,10 @@ fn service_name(service: Service) -> &'static str {
         Service::Ssh => "ssh",
         Service::Http => "http",
         Service::Https => "https",
+        Service::Smtp => "smtp",
+        Service::Smtps => "smtps",
+        Service::Mysql => "mysql",
+        Service::Postgres => "postgres",
     }
 }
 
@@ -329,6 +335,7 @@ fn build_module(
     config: &Config,
     service: Service,
 ) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    let _ = cli;
     let proxy = config.proxy.clone();
     match service {
         #[cfg(feature = "ftp")]
@@ -367,6 +374,22 @@ fn build_module(
             })?;
             Ok(Arc::new(module))
         }
+        #[cfg(feature = "smtp")]
+        Service::Smtp | Service::Smtps => Ok(Arc::new(
+            crate::protocols::SmtpModule::new().with_proxy(proxy),
+        )),
+        #[cfg(feature = "mysql")]
+        Service::Mysql => Ok(Arc::new(
+            crate::protocols::MysqlModule::new()
+                .with_database(cli.module.database.clone())
+                .with_proxy(proxy),
+        )),
+        #[cfg(feature = "postgres")]
+        Service::Postgres => Ok(Arc::new(
+            crate::protocols::PostgresModule::new()
+                .with_database(cli.module.database.clone())
+                .with_proxy(proxy),
+        )),
         #[cfg(not(feature = "ftp"))]
         Service::Ftp => Err(RunError::Message(
             "FTP support was not compiled in (enable feature `ftp`)".into(),
@@ -378,6 +401,18 @@ fn build_module(
         #[cfg(not(feature = "http"))]
         Service::Http | Service::Https => Err(RunError::Message(
             "HTTP support was not compiled in (enable feature `http`)".into(),
+        )),
+        #[cfg(not(feature = "smtp"))]
+        Service::Smtp | Service::Smtps => Err(RunError::Message(
+            "SMTP support was not compiled in (enable feature `smtp`)".into(),
+        )),
+        #[cfg(not(feature = "mysql"))]
+        Service::Mysql => Err(RunError::Message(
+            "MySQL support was not compiled in (enable feature `mysql`)".into(),
+        )),
+        #[cfg(not(feature = "postgres"))]
+        Service::Postgres => Err(RunError::Message(
+            "PostgreSQL support was not compiled in (enable feature `postgres`)".into(),
         )),
     }
 }
