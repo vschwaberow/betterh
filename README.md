@@ -1,6 +1,6 @@
 # Betterh
 
-Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, PostgreSQL, Redis, IMAP/IMAPS, and LDAP/LDAPS behind optional Cargo features.
+Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, PostgreSQL, Redis, IMAP/IMAPS, LDAP/LDAPS, and SMB behind optional Cargo features.
 
 **Authorized use only.** Use Betterh only on systems you own or are explicitly allowed to test.
 
@@ -31,7 +31,7 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
-Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`.
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`.
 
 ### Examples
 
@@ -55,10 +55,11 @@ betterh smtp 127.0.0.1:587 -u alice -P passwords.txt
 betterh mysql://127.0.0.1:3306 -u root -P passwords.txt --database app
 betterh postgres 127.0.0.1:5432 -u alice -P passwords.txt --database app
 
-# Redis, IMAP, LDAP
+# Redis, IMAP, LDAP, SMB
 betterh redis 127.0.0.1:6379 -P passwords.txt
 betterh imaps 127.0.0.1:993 -u alice -P passwords.txt --insecure
 betterh ldap://127.0.0.1:389 -u 'cn=alice,dc=example,dc=com' -P passwords.txt
+betterh smb://127.0.0.1 -u 'DOMAIN\alice' -P passwords.txt
 
 # Wordlist rules and seasonal mangling
 betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --rule-year 2026
@@ -74,7 +75,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`) |
 | Wordlists | $O(1)$ streaming wordlists; Hashcat rules (`--rules`); mangling (`-e n,s,r,y,c,l,C`); year overrides (`--rule-year`) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |

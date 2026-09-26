@@ -34,6 +34,7 @@ pub enum Service {
     Imaps,
     Ldap,
     Ldaps,
+    Smb,
 }
 
 impl Service {
@@ -53,6 +54,7 @@ impl Service {
             Self::Imaps => 993,
             Self::Ldap => 389,
             Self::Ldaps => 636,
+            Self::Smb => 445,
         }
     }
 
@@ -406,8 +408,9 @@ fn parse_service(value: &str) -> Result<Service, clap::Error> {
         "imaps" => Ok(Service::Imaps),
         "ldap" => Ok(Service::Ldap),
         "ldaps" => Ok(Service::Ldaps),
+        "smb" => Ok(Service::Smb),
         _ => Err(invalid(
-            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps",
+            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb",
         )),
     }
 }
@@ -485,6 +488,7 @@ pub(crate) fn parse_positional(service: Service, value: &str) -> Result<TargetSo
         Service::Imaps => "imaps",
         Service::Ldap => "ldap",
         Service::Ldaps => "ldaps",
+        Service::Smb => "smb",
     };
     Ok(parse_url(&format!("{scheme}://{host}"))?.source)
 }

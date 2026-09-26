@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- SMB ProtocolModule (`smb` / `smb://`, port 445): SMBv2 `NEGOTIATE` → `SESSION_SETUP` with NTLMSSP NTLMv2, optional SPNEGO wrap, SOCKS5, hermetic mocks; feasibility-smb re-exports production codecs
 - Intelligent wordlist & mutation engine (`--rules <file>`, `-e y,c,l,C`, `--rule-year <YEAR>`) with Hashcat rule interpreter, seasonal/enterprise generators, and $O(1)$ memory streaming pipeline (< 30 MB RSS across 1M candidates)
 
 - RDP/CredSSP feasibility prototype (`feasibility-rdp`) and SPEC §5.2.D.2 wire analysis
