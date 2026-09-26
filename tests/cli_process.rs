@@ -550,3 +550,80 @@ fn database_flag_rejected_on_non_database_services() {
         );
     }
 }
+
+#[test]
+fn dry_run_with_rules_file_and_seasonal_mangling_predicts_combinations() {
+    let dir = tempfile::tempdir().unwrap();
+    let users = dir.path().join("users.txt");
+    let passwords = dir.path().join("passwords.txt");
+    let rules = dir.path().join("rules.txt");
+
+    std::fs::write(&users, "alice\nbob\n").unwrap();
+    std::fs::write(&passwords, "summer\nwinter\n").unwrap();
+    std::fs::write(&rules, "c\n$!\nu\n").unwrap();
+
+    let result = run(
+        &[
+            "ssh",
+            "127.0.0.1",
+            "-L",
+            users.to_str().unwrap(),
+            "-P",
+            passwords.to_str().unwrap(),
+            "--rules",
+            rules.to_str().unwrap(),
+            "-e",
+            "y,c",
+            "--rule-year",
+            "2026",
+            "--dry-run",
+            "--format",
+            "jsonl",
+        ],
+        &[],
+    );
+
+    assert!(
+        result.status.success(),
+        "dry-run failed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(report["users"], 2);
+    // 2 passwords * 3 rules = 6 mutated base passwords
+    // + 47 seasonal & year mangled passwords per user (11 year + 36 season) = 53 passwords per user
+    assert_eq!(report["passwords"], 53);
+    // 2 users * 53 passwords = 106 combinations
+    assert_eq!(report["combinations"], 106);
+    assert_eq!(report["targets"], 1);
+}
+
+#[test]
+fn rejects_invalid_rule_syntax_with_clear_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let invalid_rules = dir.path().join("invalid.rules");
+    std::fs::write(&invalid_rules, "c\n$!\ninvalid_rule_opcode\n").unwrap();
+
+    let result = run(
+        &[
+            "ssh",
+            "127.0.0.1",
+            "-u",
+            "admin",
+            "-p",
+            "password",
+            "--rules",
+            invalid_rules.to_str().unwrap(),
+        ],
+        &[],
+    );
+
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("Invalid rule syntax on line 3")
+            && stderr.contains("Unknown rule operator 'i'"),
+        "unexpected stderr: {stderr}"
+    );
+}

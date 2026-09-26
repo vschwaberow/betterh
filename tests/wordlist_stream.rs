@@ -10,7 +10,13 @@ use std::{
 
 use betterh::{
     cli::ManglingRule,
-    engine::wordlist::{CredentialInput, CredentialStream, InputSource, credentials},
+    engine::{
+        MutationConfig,
+        mutations::RuleSet,
+        wordlist::{
+            CredentialInput, CredentialStream, InputSource, credentials, credentials_with_mutations,
+        },
+    },
 };
 use futures::TryStreamExt;
 
@@ -76,6 +82,33 @@ fn million_line_file_has_flat_memory_below_fifteen_megabytes() {
 #[test]
 fn million_line_pipe_has_flat_memory_below_fifteen_megabytes() {
     assert_flat_memory("memory-stdin");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn million_rule_mutations_have_flat_memory_below_thirty_megabytes() {
+    fn peak(output: Output) -> u64 {
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .find_map(|line| line.strip_prefix("PEAK_KIB="))
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+    let small = peak(child("memory-rules", 10_000, None));
+    let large = peak(child("memory-rules", 200_000, None));
+    assert!(
+        large * 1024 < 30_000_000,
+        "Peak RSS {large} KiB exceeds 30 MB"
+    );
+    assert!(
+        large <= small + 2 * 1024,
+        "RSS grew from {small} to {large} KiB"
+    );
+    println!(
+        "memory-rules peak RSS: 50,000 candidates = {small} KiB; 1,000,000 candidates = {large} KiB"
+    );
 }
 
 #[cfg(target_os = "linux")]
@@ -150,7 +183,7 @@ fn wordlist_child() {
         .unwrap()
         .parse::<usize>()
         .unwrap();
-    if case == "memory" {
+    if matches!(case.as_str(), "memory" | "memory-rules") {
         write_rows(std::fs::File::create(&passwords).unwrap(), rows);
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -172,12 +205,24 @@ fn wordlist_child() {
                 passwords: Some(InputSource::Stdin),
             },
             "combos" => CredentialInput::Combos(InputSource::Stdin),
-            "memory" => CredentialInput::Product {
+            "memory" | "memory-rules" => CredentialInput::Product {
                 users: InputSource::Single("ab".into()),
                 passwords: Some(InputSource::File(passwords)),
             },
             _ => panic!("Unknown child test case"),
         };
+        if case == "memory-rules" {
+            let rules_content = "c\n$!\nu\n$1\n^0";
+            let rule_set: RuleSet = rules_content.parse().unwrap();
+            let config = MutationConfig {
+                mangling: &[],
+                rule_set: Some(&rule_set),
+                rule_year: None,
+            };
+            let stream = credentials_with_mutations(source, &config).unwrap();
+            count_and_report(stream, rows * 5).await;
+            return;
+        }
         let rules = if case == "passwords" {
             &[ManglingRule::Empty, ManglingRule::Reverse][..]
         } else {

@@ -85,6 +85,13 @@ pub async fn run_attack(
     let scope = Scope::load(cli.exclude.clone(), cli.exclude_file.as_deref()).await?;
     let timeout = Duration::from_secs(config.timeout_secs.get());
 
+    let rule_set = cli
+        .rules_file
+        .as_deref()
+        .map(crate::engine::mutations::RuleSet::from_file)
+        .transpose()
+        .map_err(WordlistError::from)?;
+
     let mut prepared = Vec::new();
     let mut stream = expand(input.clone(), scope.clone());
     while let Some(item) = stream.next().await {
@@ -101,12 +108,6 @@ pub async fn run_attack(
         ));
     }
 
-    let rule_set = cli
-        .rules_file
-        .as_deref()
-        .map(crate::engine::mutations::RuleSet::from_file)
-        .transpose()
-        .map_err(WordlistError::from)?;
     let mutation_config = MutationConfig {
         mangling: &cli.mangling,
         rule_set: rule_set.as_ref(),
