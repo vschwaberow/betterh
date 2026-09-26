@@ -411,10 +411,37 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
   - **Go (prototype proven)**: TPKT ↔ X.224 `CR` with cookie + `RDP_NEG_REQ`/`RDP_NEG_RSP` framing, and minimal CredSSP `TSRequest` DER wrap/unwrap of an opaque NegoToken, are implementable in-tree without C.
   - **Remaining before a full `ProtocolModule`**: live TLS+CredSSP interop, `pubKeyAuth` channel binding, `TSCredentials` encryption, Extended CredSSP nonce handling, and Kerberos mech alternate — tracked as post-feasibility work.
 - **Prototype location**: `src/feasibility/rdp.rs` (feature = `feasibility-rdp`), hermetic unit tests only (no live RDP server required for Phase 11.2). NTLMv2 crypto reuse is documented against §D.1 (`feasibility-smb`); this crate feature stays independent so default CI can enable either gate alone.
+- **Production track (Phase 16)**: Full `ProtocolModule` at `src/protocols/rdp.rs` (feature `rdp`), CLI `rdp://`, port 3389. NLA path only (CredSSP + NTLMv2): negotiate Hybrid → TLS → `TSRequest` → Type 1/2/3 → `pubKeyAuth` binding → encrypted `TSCredentials`. Out of scope: graphics/channels, Kerberos, non-NLA legacy RDP security. Security: no credential logging; `--insecure` = cert verify bypass only; crypto in `spawn_blocking`.
 
 #### E. Post-Expansion Refactoring Track (Phase 14)
 
 After Phases 8–13 grow the protocol surface, Phase 14 consolidates registries (`Service` / `build_module`), shared dial/timeout/line I/O helpers, oversized module splits, and feasibility↔production code sharing. No new `ProtocolModule` methods; structural cleanup only. Spec-first if a shared helper changes a documented contract.
+
+#### F. Intelligent Wordlist Mutation (Phase 15)
+
+Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling with $O(1)$ RAM (see PLAN Phase 15). No protocol surface change.
+
+#### G. WinRM / HTTP(S) Negotiate (Phase 17)
+
+- **Transport**: HTTP TCP/5985 (`winrm`), HTTPS TCP/5986 (`winrms`); typical path `/wsman`.
+- **Auth**: `WWW-Authenticate: Negotiate` / NTLM multi-leg using shared NTLMv2. **No** silent Basic fallback.
+- **Security**: Never log `Authorization` or raw NTLM tokens; HTTPS verify unless `--insecure`; SOCKS5; auth-only (no command invocation).
+- **Module**: `src/protocols/winrm.rs` (feature = `winrm`).
+
+#### H. MSSQL TDS Login (Phase 18)
+
+- **Transport**: TCP/1433; TDS PRELOGIN + LOGIN7 SQL authentication.
+- **TLS**: Honour PRELOGIN encrypt-login / full encrypt via `TransportStream` before password material when required.
+- **Out of scope**: Windows Integrated / SSPI / Kerberos / Azure AD; post-login queries.
+- **Security**: No password logging; `--insecure` = cert verify bypass only.
+- **Module**: `src/protocols/mssql.rs` (feature = `mssql`), CLI `mssql://`.
+
+#### I. POP3 / POP3S (Phase 19)
+
+- **Transport**: TCP/110 (+ `STLS`), TCP/995 implicit TLS (`pop3s`).
+- **Auth**: `USER`/`PASS`; optional `AUTH PLAIN` when `CAPA` advertises it; always `QUIT`.
+- **Security**: Prefer STARTTLS before `PASS` when required; `--insecure` for cert bypass; no credential logging; SOCKS5.
+- **Module**: `src/protocols/pop3.rs` (feature = `pop3`).
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
@@ -792,6 +819,10 @@ betterh/
     │   ├── postgres.rs       # PostgreSQL 3.0 wire module (feature = "postgres")
     │   ├── redis.rs          # Redis RESP module (feature = "redis")
     │   ├── smb.rs            # SMBv2/NTLMSSP NTLMv2 auth module (feature = "smb")
+    │   ├── rdp.rs            # RDP CredSSP/NLA auth module (feature = "rdp")
+    │   ├── winrm.rs          # WinRM HTTP(S) Negotiate auth (feature = "winrm")
+    │   ├── mssql.rs          # MSSQL TDS LOGIN7 module (feature = "mssql")
+    │   ├── pop3.rs           # POP3/POP3S module (feature = "pop3")
     │   ├── smtp.rs           # SMTP AUTH PLAIN/LOGIN/STARTTLS module (feature = "smtp")
     │   ├── socks.rs          # Shared SOCKS5 dial helper
     │   ├── ssh.rs            # SSH module (feature = "ssh")
