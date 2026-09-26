@@ -30,6 +30,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Changed
 
+- PLAN/SPEC add Phases 15–19: mutation engine, RDP CredSSP/NLA, WinRM Negotiate, MSSQL TDS, POP3/POP3S roadmaps
 - PLAN/SPEC add Phase 14 post-expansion refactoring roadmap (registry, I/O helpers, module splits)
 - PLAN/SPEC add Phase 13 SMB `ProtocolModule` production roadmap (NTLMv2 auth on TCP/445)
 - README documents Redis, IMAP/IMAPS, LDAP/LDAPS, updated MySQL/PostgreSQL auth, and Phase 11 feasibility feature flags
