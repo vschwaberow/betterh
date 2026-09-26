@@ -124,6 +124,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 14.2 Shared dial, timeout, and line/framed I/O helpers         |
 |  - 14.3 Split oversized modules; retire clippy expect debt        |
 |  - 14.4 Feasibility↔production share; SPEC/README sync            |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 15: Intelligent Wordlist & Mutation Engine (O(1) RAM)     |
+|  - 15.1 Hashcat rule interpreter (: c l u $X ^X sXY <N >N)        |
+|  - 15.2 Enterprise & seasonal mangling (-e y, -e c, -e l, -e C)   |
+|  - 15.3 Wordlist rule-file streaming pipeline (--rules <file>)    |
+|  - 15.4 Combination estimator, CLI diagnostics & tests            |
 +-------------------------------------------------------------------+
 ```
 
@@ -807,6 +816,7 @@ cargo fmt --check
 
 ---
 
+<<<<<<< Updated upstream
 ## Phase 14: Post-Expansion Refactoring & Deduplication
 
 **Goal**: After the protocol expansion (Phases 8–13), systematically remove duplication and structural debt from many near-parallel modules—without speculative abstractions. Prefer extracting only helpers used ≥2 times; keep Apollo/Tokio rules (borrow over clone, no locks across await, bounded spawning). Phase 6 covered the early core; Phase 14 targets post-SMTP/DB/infra/enterprise growth. May run interleaved with Phase 12/13 implementation as modules land.
@@ -846,6 +856,46 @@ cargo fmt --check
 
 ---
 
+## Phase 15: Intelligent Wordlist & Mutation Engine ($O(1)$ Streaming)
+
+**Goal**: Implement an intelligent, high-throughput, memory-bounded ($O(1)$ RAM) password mutation engine supporting Hashcat-compatible rule files (`--rules <file>`), enterprise seasonal and year password pattern generation (`-e y`, `-e c`), and leet-speak / case transformations (`-e l`, `-e C`) while maintaining strict $< 30\text{ MB}$ RSS memory usage.
+
+### Tasks
+- [ ] **Task 15.1: Rule Mutation Engine & Hashcat Interpreter (`src/engine/mutations.rs`)**
+  - **Description**: Implement a streaming Hashcat/John-compatible rule interpreter supporting core operators: `:`, `l`, `u`, `c`, `C`, `t`, `r`, `d`, `f`, `$X`, `^X`, `sXY`, `[`, `]`, `{`, `}`, `<N`, `>N`. Parse rule files line-by-line, rejecting invalid syntax before attack execution. Provide `RuleSet` with zero-allocation in-place string transforms where possible.
+  - **Acceptance**: Correct transformation of test vectors matching Hashcat canonical outputs; unit tests for all operators and rejection rules.
+  - **Files**: `src/engine/mutations.rs`, `src/engine/mod.rs`
+  - **Verify**: `cargo test engine::mutations`
+
+- [ ] **Task 15.2: Enterprise & Seasonal Mangling Rules (`-e y`, `-e c`, `-e l`, `-e C`)**
+  - **Description**: Extend `ManglingRule` enum in `src/cli.rs` and candidate generator in `src/engine/mutations.rs`. Add current/previous year appending (`-e y`), enterprise seasonal patterns (`-e c`: `Winter2026!`, `Sommer2026#`), leet substitutions (`-e l`), and initial capitalization (`-e C`). Integrate with optional `--rule-year <YEAR>` parameter (defaults to current system year in UTC). Wire into `mangled()` user prelude stream.
+  - **Acceptance**: Correctly generates expected seasonal and year candidate strings in deterministic order.
+  - **Files**: `src/cli.rs`, `src/engine/wordlist.rs`, `src/engine/mutations.rs`
+  - **Verify**: Unit tests in `src/engine/wordlist.rs` asserting candidate output sequences.
+
+- [ ] **Task 15.3: Wordlist Rule-File Streaming Pipeline (`--rules <file>`)**
+  - **Description**: Add `--rules <file>` flag to CLI. Integrate `RuleSet` into the asynchronous wordlist streaming pipeline in `src/engine/wordlist.rs`. Apply rules lazily to each password streamed from files or stdin (`-P -`).
+  - **Acceptance**: Wordlist stream yields mutated passwords in $O(1)$ memory; RSS memory remains strictly $< 30\text{ MB}$ under a 1,000,000-candidate test run.
+  - **Files**: `src/cli.rs`, `src/engine/wordlist.rs`, `src/engine/runner.rs`
+  - **Verify**: Memory flatline test in `tests/wordlist_stream.rs`.
+
+- [ ] **Task 15.4: Combination Estimator, CLI Diagnostics & Integration Tests**
+  - **Description**: Update combination counter in `src/engine/dryrun.rs` to compute accurate combination counts ($Users \times (Passwords \times Rules + Mangling)$). Add end-to-end integration tests in `tests/cli_process.rs` verifying CLI validation, dry-run tables, and execution.
+  - **Acceptance**: `betterh --dry-run` accurately predicts combination count with active `--rules` and `-e` flags; reject invalid rule files with helpful diagnostics.
+  - **Files**: `src/engine/dryrun.rs`, `tests/cli_process.rs`
+  - **Verify**: `cargo test --test cli_process`, `cargo test --test wordlist_stream`.
+
+### Phase 15 Checkpoint
+
+```bash
+cargo test engine::mutations engine::wordlist engine::dryrun
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -857,6 +907,7 @@ cargo fmt --check
 | **Protocol Gating** | Build individual protocols | `cargo check --no-default-features --features <proto>` |
 | **MCP Server** | Hermetic duplex JSON-RPC 2.0 tests | `cargo test --test mcp_server` |
 | **SMB Auth Module** | Hermetic NetBIOS/SMB2/NTLMv2 mocks | `cargo test protocols::smb` |
+| **Mutation Engine**| Rule mutation & seasonal candidate tests | `cargo test engine::mutations` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

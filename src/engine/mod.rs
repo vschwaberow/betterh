@@ -9,6 +9,7 @@ pub mod canary;
 pub mod checkpoint;
 pub mod dryrun;
 pub mod keys;
+pub mod mutations;
 pub mod pool;
 pub mod proxy;
 pub mod request_guard;
@@ -27,6 +28,10 @@ pub use dryrun::{
     DryRunError, DryRunReport, Reachability, audit, audit_with_cancellation, render_table,
 };
 pub use keys::{RuntimeCommand, interpret_key, listen as listen_keys};
+pub use mutations::{
+    MutationError, Rule, RuleOp, RuleSet, generate_leet_candidates, generate_season_candidates,
+    generate_year_candidates,
+};
 pub use pool::{Attempt, Finding, PoolConfig, PoolError, prepare_target, run_brute};
 pub use proxy::{Pacer, ProxyError, ProxyPool};
 pub use request_guard::{GuardError, RequestGuard, StopReason};
