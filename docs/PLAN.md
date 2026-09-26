@@ -106,6 +106,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 12.2 MCP Tools (audit_dryrun, audit_execute, validate_scope)   |
 |  - 12.3 MCP Resources & Secure Session / Finding Reporting        |
 |  - 12.4 CLI Subcommand (betterh mcp) & Hermetic Duplex Tests      |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 13: SMB ProtocolModule (NTLMv2 Auth Track)              |
+|  - 13.1 SmbModule wire path (NetBIOS / SMB2 NEGOTIATE+SETUP)      |
+|  - 13.2 NTLMSSP Type 1/2/3 + NTLMv2 proof & NTSTATUS mapping       |
+|  - 13.3 Minimal SPNEGO wrap, SOCKS5, timeout-friendly I/O         |
+|  - 13.4 CLI smb:// wiring, hermetic mocks, README / CHANGELOG     |
 +-------------------------------------------------------------------+
 ```
 
@@ -744,6 +753,51 @@ cargo fmt --check
 
 ---
 
+## Phase 13: SMB ProtocolModule (NTLMv2 Authentication Track)
+
+**Goal**: Promote the Phase 11.1 SMBv2/NTLMSSP feasibility prototype into a production `ProtocolModule` that authenticates against SMB over TCP/445 using `NEGOTIATE` → `SESSION_SETUP` with SPNEGO/NTLMSSP **NTLMv2**, without C bindings (`libsmbclient` / Samba FFI). Auth auditor only — no file/share I/O, Kerberos, or guest-as-primary path. Full SMB 3.1.1 preauth/signing/sealing productization stays out of scope unless required to observe auth success.
+
+### Tasks
+- [ ] **Task 13.1: SmbModule Wire Path (NetBIOS / SMB2 NEGOTIATE + SESSION_SETUP)**
+  - **Description**: Implement `SmbModule` (feature = `smb`) with NetBIOS session framing, SMB2 header encode/decode, and a type-state dialogue `Disconnected → Negotiated → SessionChallenged → Authenticated`. Promote/reuse codecs from `src/feasibility/smb.rs` into `src/protocols/smb.rs` without leaving duplicate crypto paths (`feasibility-smb` remains an offline codec harness or thin re-export).
+  - **Acceptance**: Hermetic encode/decode of NEGOTIATE and SESSION_SETUP request/response frames; illegal state transitions are unrepresentable or rejected.
+  - **Files**: `src/protocols/smb.rs`, `src/protocols/mod.rs`, `src/feasibility/smb.rs`, `Cargo.toml` (`smb`)
+  - **Verify**: Unit tests in `src/protocols/smb.rs` for framing round-trips.
+
+- [ ] **Task 13.2: NTLMSSP Type 1/2/3 + NTLMv2 Proof & NTSTATUS Mapping**
+  - **Description**: Complete the auth path: Type 1 negotiate → Type 2 challenge (server challenge + AV_PAIRs) → Type 3 authenticate with NTLMv2 NT proof. Run MD4/HMAC-MD5 in `tokio::task::spawn_blocking`. Map NTSTATUS to `AuthResult` (`STATUS_SUCCESS` → Success; logon failure codes → Failure; lockout / account restrictions → LockedOut where mappable; busy / insufficient resources → RateLimited).
+  - **Acceptance**: Authenticates against a hermetic mock SMB peer for success and failure credentials; crypto matches Phase 11.1 vectors.
+  - **Files**: `src/protocols/smb.rs`
+  - **Verify**: Hermetic mock listener tests in `src/protocols/smb.rs`.
+
+- [ ] **Task 13.3: Minimal SPNEGO Wrap, SOCKS5 & Timeout-Friendly I/O**
+  - **Description**: Wrap NTLMSSP tokens in minimal SPNEGO (or send raw NTLMSSP when the peer accepts it after negotiate). Dial via existing SOCKS5 helper. Bound all reads/writes with the module timeout; keep I/O cooperative with cancellation (no blocking sleeps; no std Mutex across await).
+  - **Acceptance**: Mock tests cover SPNEGO-or-raw NTLMSSP SESSION_SETUP; SOCKS5 dial path compiles and is exercised where other modules do.
+  - **Files**: `src/protocols/smb.rs`, `src/protocols/socks.rs` (reuse only)
+  - **Verify**: Unit/mock tests for security buffer handling and timeout errors → `ProtocolError`.
+
+- [ ] **Task 13.4: CLI Wiring (`smb://`), Hermetic Mocks, README & CHANGELOG**
+  - **Description**: Wire production SMB into CLI and runner:
+    - Add `Smb` to `Service` enum in `src/cli.rs` (scheme `smb://`, default port 445).
+    - Register module in `src/protocols/mod.rs` and `build_module` in `src/engine/runner.rs`.
+    - Update `Cargo.toml` features (`smb` with `md4`/`hmac`/`md5-hmac`; include in `default` when ready).
+    - Hermetic mock tests plus CLI dry-run coverage in `tests/cli_process.rs`.
+    - Update README service list/capabilities and CHANGELOG; keep `feasibility-smb` for offline codec tests without duplicated NTLMv2 implementations.
+  - **Acceptance**: `betterh smb ...` / `smb://` parse, validate, and dry-run; `cargo test protocols::smb` and clippy/fmt clean.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test protocols::smb`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt --check`.
+
+### Phase 13 Checkpoint
+
+```bash
+cargo test protocols::smb
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -754,6 +808,7 @@ cargo fmt --check
 | **Feature Gating** | Build minimal without default features | `cargo check --no-default-features --features http` |
 | **Protocol Gating** | Build individual protocols | `cargo check --no-default-features --features <proto>` |
 | **MCP Server** | Hermetic duplex JSON-RPC 2.0 tests | `cargo test --test mcp_server` |
+| **SMB Auth Module** | Hermetic NetBIOS/SMB2/NTLMv2 mocks | `cargo test protocols::smb` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

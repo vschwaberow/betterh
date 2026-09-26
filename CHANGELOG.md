@@ -30,6 +30,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Changed
 
+- PLAN/SPEC add Phase 13 SMB `ProtocolModule` production roadmap (NTLMv2 auth on TCP/445)
 - README documents Redis, IMAP/IMAPS, LDAP/LDAPS, updated MySQL/PostgreSQL auth, and Phase 11 feasibility feature flags
 - README documents SMTP/SMTPS, MySQL, and PostgreSQL alongside the original protocols
 - CI checkout Action bumped to `actions/checkout@v7` (#3)
