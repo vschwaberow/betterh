@@ -14,6 +14,9 @@ pub mod mock;
 pub mod socks;
 pub mod types;
 
+#[cfg(feature = "tls")]
+pub mod tls;
+
 #[cfg(feature = "ftp")]
 pub mod ftp;
 
@@ -86,6 +89,9 @@ pub trait ProtocolModule: Send + Sync {
         timeout: Duration,
     ) -> Result<AuthResult, ProtocolError>;
 }
+
+#[cfg(feature = "tls")]
+pub use tls::{TransportStream, wrap_tls};
 
 #[cfg(feature = "ftp")]
 pub use ftp::FtpModule;
