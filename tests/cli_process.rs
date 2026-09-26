@@ -488,7 +488,18 @@ fn dry_run_reports_nonlocal_probe_as_skipped_in_text_and_json() {
 
 #[test]
 fn dry_run_extended_protocols_validate_and_estimate_work() {
-    for service in ["smtp", "smtps", "mysql", "postgres", "postgresql"] {
+    for service in [
+        "smtp",
+        "smtps",
+        "mysql",
+        "postgres",
+        "postgresql",
+        "redis",
+        "imap",
+        "imaps",
+        "ldap",
+        "ldaps",
+    ] {
         let mut args = vec![
             service,
             "127.0.0.1",
@@ -517,7 +528,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
 
 #[test]
 fn database_flag_rejected_on_non_database_services() {
-    for service in ["ssh", "ftp", "http", "smtp"] {
+    for service in ["ssh", "ftp", "http", "smtp", "redis", "imap", "ldap"] {
         let result = run(
             &[
                 service,

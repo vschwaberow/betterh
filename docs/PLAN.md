@@ -633,7 +633,7 @@ cargo fmt --check
   - **Files**: `src/protocols/ldap.rs`, `src/protocols/mod.rs`
   - **Verify**: Hermetic mock tests in `src/protocols/ldap.rs`.
 
-- [ ] **Task 10.4: Extended Protocol Wiring, CLI Options & Integration Tests**
+- [x] **Task 10.4: Extended Protocol Wiring, CLI Options & Integration Tests**
   - **Description**: Wire new protocols into CLI and runner:
     - Add `Redis`, `Imap`, `Imaps`, `Ldap`, `Ldaps` to `Service` enum in `src/cli.rs`.
     - Register default ports and URL schemes (`redis://`, `imap://`, `imaps://`, `ldap://`, `ldaps://`).
