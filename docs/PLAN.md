@@ -133,6 +133,42 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 15.2 Enterprise & seasonal mangling (-e y, -e c, -e l, -e C)   |
 |  - 15.3 Wordlist rule-file streaming pipeline (--rules <file>)    |
 |  - 15.4 Combination estimator, CLI diagnostics & tests            |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 16: RDP ProtocolModule (CredSSP / NLA)                  |
+|  - 16.1 TPKT/X.224/RDP_NEG + TLS upgrade path                     |
+|  - 16.2 CredSSP TSRequest + NTLMv2 NLA (reuse SMB crypto)         |
+|  - 16.3 pubKeyAuth channel binding & TSCredentials encrypt        |
+|  - 16.4 CLI rdp://, mocks, safety (no secret logs), docs          |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 17: WinRM / HTTP(S) Negotiate (NTLM)                      |
+|  - 17.1 WinRM HTTP(S) framing & auth probe                        |
+|  - 17.2 Negotiate/NTLM HTTP auth (shared NTLMv2)                  |
+|  - 17.3 TLS, --insecure, SOCKS5, Basic fallback policy            |
+|  - 17.4 CLI winrm/winrms, hermetic mocks, docs                    |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 18: MSSQL TDS Login Module                              |
+|  - 18.1 TDS PRELOGIN / LOGIN7 framing                             |
+|  - 18.2 SQL auth + TLS encrypt-login / Full encrypt               |
+|  - 18.3 Error/token mapping, SOCKS5, timeouts                     |
+|  - 18.4 CLI mssql://, mocks, docs                                 |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 19: POP3 / POP3S Protocol Module                        |
+|  - 19.1 POP3 dialogue USER/PASS (+ optional AUTH PLAIN)           |
+|  - 19.2 STARTTLS (110) & implicit POP3S (995)                     |
+|  - 19.3 Result mapping, SOCKS5, clean QUIT                        |
+|  - 19.4 CLI pop3/pop3s, hermetic mocks, docs                      |
 +-------------------------------------------------------------------+
 ```
 
@@ -892,7 +928,7 @@ enterprise seasonal patterns `-e c`, year patterns `-e y` with `--rule-year`, le
 $O(1)$ streaming password mutation pipeline via `credentials_with_mutations`, dry-run combination estimator,
 fail-fast admission control for rule syntax errors, and isolated-process memory test verifying $< 30\text{ MB}$ RSS across 1,000,000 candidates).
 
-Verification: 243 tests passed across all unit, integration, and streaming memory suites.
+Verification: 254 tests passed across all unit, integration, and streaming memory suites.
 `cargo fmt --check` and `cargo clippy --all-targets --all-features --locked -- -D warnings` passed with 0 warnings.
 
 ```bash
@@ -904,6 +940,175 @@ cargo fmt --check
 
 ---
 
+## Phase 16: RDP ProtocolModule (CredSSP / NLA)
+
+**Goal**: Promote the Phase 11.2 RDP/CredSSP feasibility prototype into a production `ProtocolModule` that authenticates via NLA (CredSSP + NTLMv2) on TCP/3389, reusing shared NTLMv2 helpers from the SMB track. Auth-only — no remote desktop graphics, clipboard, or drive redirection. Security bar: TLS via existing `TransportStream`/rustls; credentials never logged; `--insecure` only bypasses cert verification; crypto in `spawn_blocking`; hermetic mocks only in CI.
+
+**Depends on**: Phase 13 SMB NTLMv2 helpers (or equivalent shared crypto from Phase 14.4); Phase 9 `TransportStream`.
+
+### Tasks
+- [ ] **Task 16.1: TPKT / X.224 / `RDP_NEG` Wire Path & TLS Upgrade**
+  - **Description**: Implement `RdpModule` (feature = `rdp`) with TPKT + X.224 Connection Request (cookie + `RDP_NEG_REQ` requesting `PROTOCOL_SSL|HYBRID|HYBRID_EX`), parse `RDP_NEG_RSP`/`FAILURE`, then upgrade the same TCP socket with TLS when Hybrid/SSL is selected. Promote framing from `src/feasibility/rdp.rs` into `src/protocols/rdp.rs` without duplicating codecs. NLA-only: reject or hard-error legacy `PROTOCOL_RDP` without TLS for auth audits.
+  - **Acceptance**: Hermetic mock completes negotiate → TLS-ready state; clear error if peer forces non-NLA-only legacy security.
+  - **Files**: `src/protocols/rdp.rs`, `src/protocols/mod.rs`, `src/feasibility/rdp.rs`, `Cargo.toml` (`rdp`)
+  - **Verify**: Unit/mock tests for TPKT/X.224/`RDP_NEG` round-trips and TLS wrap.
+
+- [ ] **Task 16.2: CredSSP `TSRequest` + NTLMv2 NLA**
+  - **Description**: On the TLS stream, exchange CredSSP `TSRequest` negoTokens carrying SPNEGO/NTLMSSP Type 1→2→3 using shared NTLMv2 proofs. Map auth outcomes to `AuthResult`. Timeouts on every read/write; cooperative cancellation; SOCKS5 dial via existing helper.
+  - **Acceptance**: Mock CredSSP peer: success and wrong-password paths; no password/NT hash in `tracing`/`Display` of errors.
+  - **Files**: `src/protocols/rdp.rs`, shared NTLM helpers
+  - **Verify**: Hermetic mock listener tests in `src/protocols/rdp.rs`.
+
+- [ ] **Task 16.3: `pubKeyAuth` Channel Binding & `TSCredentials` Encryption**
+  - **Description**: Implement CredSSP server public-key binding (`pubKeyAuth`) and encrypted `TSCredentials` as required for real Windows NLA peers. Fail closed on binding mismatch. Document Extended CredSSP (`PROTOCOL_HYBRID_EX`) nonce handling support level; Kerberos mech remains out of scope.
+  - **Acceptance**: Mock or recorded-vector tests cover binding success/failure; wrong binding → Failure (not Success); clippy/fmt clean.
+  - **Files**: `src/protocols/rdp.rs`, `docs/SPEC.md` §D.2 production notes
+  - **Verify**: Dedicated unit tests for binding and credential blob encode/decode.
+
+- [ ] **Task 16.4: CLI Wiring (`rdp://`), Safety Review, Docs**
+  - **Description**: Add `Service::Rdp` (port 3389, `rdp://`); register module; CLI dry-run; README/CHANGELOG. Safety checklist: no secret logging, `--insecure` gated, explicit decision whether `rdp` is in Cargo `default`.
+  - **Acceptance**: `betterh rdp ...` parses/validates/dry-runs; `cargo test protocols::rdp` green; SPEC tree lists `protocols/rdp.rs`.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
+  - **Verify**: `cargo test protocols::rdp`, clippy `-D warnings`, `cargo fmt --check`.
+
+### Phase 16 Checkpoint
+
+```bash
+cargo test protocols::rdp
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 17: WinRM / HTTP(S) Negotiate (NTLM)
+
+**Goal**: Add WinRM authentication auditing over HTTP(S) using Negotiate/NTLMSSP (NTLMv2), reusing shared NTLM crypto and existing HTTP/TLS stacks where practical. Auth-only (no command execution / shell). Security bar: HTTPS by default for `winrms`; cleartext HTTP only for explicit `winrm`; never log Authorization headers or NTLM blobs; `--insecure` only for TLS verify bypass; **no silent Basic fallback**.
+
+**Depends on**: Shared NTLMv2 helpers (Phase 13/14); `http` + `tls` features.
+
+### Tasks
+- [ ] **Task 17.1: WinRM HTTP(S) Framing & Auth Probe**
+  - **Description**: Implement `WinrmModule` (feature = `winrm`) targeting typical endpoints (e.g. `/wsman`). Probe with an unauthenticated request; detect `WWW-Authenticate: Negotiate` / `NTLM`. Ports: 5985 (HTTP), 5986 (HTTPS).
+  - **Acceptance**: Hermetic mock returns 401 with Negotiate; module selects Negotiate path; missing Negotiate → clear `ProtocolError` (no silent Basic).
+  - **Files**: `src/protocols/winrm.rs`, `src/protocols/mod.rs`, `Cargo.toml`
+  - **Verify**: Mock HTTP server tests for probe behaviour.
+
+- [ ] **Task 17.2: HTTP Negotiate / NTLM Type 1–3 Exchange**
+  - **Description**: Implement multi-leg HTTP auth: send Type 1, parse Type 2 from `WWW-Authenticate`, send Type 3 with NTLMv2 via shared helpers (`spawn_blocking`). Map HTTP success vs auth failure (and WinRM SOAP faults that mean auth failure) to `AuthResult`.
+  - **Acceptance**: Success and failure credentials against mock; NTLM tokens never written to logs at info/debug without redaction.
+  - **Files**: `src/protocols/winrm.rs`, shared NTLM helpers
+  - **Verify**: Hermetic multi-request mock tests.
+
+- [ ] **Task 17.3: TLS, `--insecure`, SOCKS5 & Basic Policy**
+  - **Description**: Wire HTTPS via rustls/`TransportStream` or reqwest rustls path consistently with other modules. SOCKS5 support. Policy: do not fall back to Basic unless an explicit future opt-in flag is added (default off — document in SPEC).
+  - **Acceptance**: `winrms` + `--insecure` works in mock TLS; Basic fallback absent by default; timeouts enforced.
+  - **Files**: `src/protocols/winrm.rs`, `docs/SPEC.md`
+  - **Verify**: TLS and proxy unit/mock coverage aligned with HTTP module patterns.
+
+- [ ] **Task 17.4: CLI Wiring (`winrm` / `winrms`), Mocks, Docs**
+  - **Description**: `Service::Winrm` / `Winrms`, schemes `winrm://` / `winrms://`, runner registry, CLI tests, README/CHANGELOG.
+  - **Acceptance**: Dry-run and validation green; feature-gated build works `--features winrm`.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test protocols::winrm`, clippy, fmt.
+
+### Phase 17 Checkpoint
+
+```bash
+cargo test protocols::winrm
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 18: MSSQL TDS Login Module
+
+**Goal**: Native TDS authentication module for Microsoft SQL Server (SQL authentication LOGIN7), with TLS encrypt-login / full encryption as required by modern servers. Auth-only — no query execution. Security bar: respect encrypt flags; no password in logs; `--insecure` only for cert verify; never send LOGIN7 secret material in clear when the server requires encryption.
+
+**Depends on**: Phase 9 TLS helper; optional registry cleanup from Phase 14.1.
+
+### Tasks
+- [ ] **Task 18.1: TDS PRELOGIN & Packet Framing**
+  - **Description**: Implement `MssqlModule` (feature = `mssql`) with TDS packet header (type, status, length, SPID, packet ID), PRELOGIN option tokens (VERSION, ENCRYPTION, INSTOPT, THREADID, MARS). Default port 1433.
+  - **Acceptance**: Hermetic mock PRELOGIN round-trip; clear errors on truncated/invalid packets.
+  - **Files**: `src/protocols/mssql.rs`, `src/protocols/mod.rs`, `Cargo.toml`
+  - **Verify**: Framing unit tests in `src/protocols/mssql.rs`.
+
+- [ ] **Task 18.2: LOGIN7 SQL Auth + TLS Encrypt Modes**
+  - **Description**: Build LOGIN7 for username/password SQL auth. Honour PRELOGIN encryption: encrypt-login and full encrypt via `TransportStream`. Reject sending plaintext LOGIN7 when server demands encryption. Windows/SSPI/Integrated auth and Azure AD out of scope (document in SPEC).
+  - **Acceptance**: Mock success/failure login; encrypt-required path never sends password in clear; optional `--database` if aligned with MySQL/Postgres CLI.
+  - **Files**: `src/protocols/mssql.rs`, `src/protocols/tls.rs`
+  - **Verify**: Hermetic mock tests for encrypt-login and failure tokens.
+
+- [ ] **Task 18.3: Token/Error Mapping, SOCKS5, Timeouts**
+  - **Description**: Map LOGINACK → Success; error tokens (e.g. 18456 login failed) → Failure; lockout-like messages → LockedOut when identifiable; resource limits → RateLimited. SOCKS5 dial; bounded timeouts; no unwrap in paths.
+  - **Acceptance**: Mapped results covered by mocks; proxy path compiles like other DB modules.
+  - **Files**: `src/protocols/mssql.rs`
+  - **Verify**: Mock error-token tests.
+
+- [ ] **Task 18.4: CLI Wiring (`mssql://`), Docs**
+  - **Description**: `Service::Mssql`, scheme `mssql://`, port 1433, runner, CLI tests, README/CHANGELOG/SPEC tree.
+  - **Acceptance**: Dry-run works; `cargo test protocols::mssql` green.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
+  - **Verify**: clippy `-D warnings`, fmt.
+
+### Phase 18 Checkpoint
+
+```bash
+cargo test protocols::mssql
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+## Phase 19: POP3 / POP3S Protocol Module
+
+**Goal**: POP3 authentication module mirroring IMAP patterns: `USER`/`PASS` (and optional `AUTH PLAIN` if advertised), STARTTLS on 110, implicit TLS on 995 (`pop3s`). Security bar: STARTTLS before PASS when offered/required; `--insecure` only for cert verify; no credentials in logs; clean `QUIT`.
+
+**Depends on**: Phase 9 `TransportStream`; Phase 14.2 line I/O helpers if landed (otherwise local CRLF reader, then dedupe in 14.2).
+
+### Tasks
+- [ ] **Task 19.1: POP3 Dialogue (`USER` / `PASS`, Optional `AUTH PLAIN`)**
+  - **Description**: Implement `Pop3Module` (feature = `pop3`). Parse `+OK`/`-ERR` greeting; `USER`/`PASS`; if `CAPA` lists SASL `PLAIN`, allow `AUTH PLAIN` as alternate path (default: USER/PASS first — document).
+  - **Acceptance**: Hermetic mock success/failure; unknown capa ignored safely.
+  - **Files**: `src/protocols/pop3.rs`, `src/protocols/mod.rs`, `Cargo.toml`
+  - **Verify**: Mock tests in `src/protocols/pop3.rs`.
+
+- [ ] **Task 19.2: STARTTLS (110) & Implicit POP3S (995)**
+  - **Description**: On port 110, if `STLS` in capa (or policy always-try), issue `STLS`, upgrade via `TransportStream`, then auth. On 995/`pop3s`/`ssl`, wrap TLS before greeting as required (document order). Honour `--insecure`.
+  - **Acceptance**: Plain, STARTTLS, and POP3S mocks pass; do not send plaintext PASS when TLS was required and STLS failed.
+  - **Files**: `src/protocols/pop3.rs`, `src/protocols/tls.rs`
+  - **Verify**: Three-path hermetic tests.
+
+- [ ] **Task 19.3: Result Mapping, SOCKS5, `QUIT`**
+  - **Description**: `+OK` after PASS → Success; `-ERR` auth fail → Failure; temporary errors → RateLimited where applicable. Always attempt `QUIT`. SOCKS5 support.
+  - **Acceptance**: Mapping tests + quit-on-success/failure; timeouts enforced.
+  - **Files**: `src/protocols/pop3.rs`
+  - **Verify**: Unit/mock tests.
+
+- [ ] **Task 19.4: CLI Wiring (`pop3` / `pop3s`), Docs**
+  - **Description**: Services/schemes `pop3://` / `pop3s://`, ports 110/995, runner, CLI tests, README/CHANGELOG/SPEC.
+  - **Acceptance**: Dry-run green; feature `pop3` builds cleanly.
+  - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
+  - **Verify**: `cargo test protocols::pop3`, clippy, fmt.
+
+### Phase 19 Checkpoint
+
+```bash
+cargo test protocols::pop3
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+>>>>>>> origin/master
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -916,6 +1121,10 @@ cargo fmt --check
 | **MCP Server** | Hermetic duplex JSON-RPC 2.0 tests | `cargo test --test mcp_server` |
 | **SMB Auth Module** | Hermetic NetBIOS/SMB2/NTLMv2 mocks | `cargo test protocols::smb` |
 | **Mutation Engine**| Rule mutation & seasonal candidate tests | `cargo test engine::mutations` |
+| **RDP Auth Module** | Hermetic CredSSP/NLA mocks | `cargo test protocols::rdp` |
+| **WinRM Auth Module** | Hermetic HTTP Negotiate mocks | `cargo test protocols::winrm` |
+| **MSSQL Auth Module** | Hermetic TDS LOGIN7 mocks | `cargo test protocols::mssql` |
+| **POP3 Auth Module** | Hermetic POP3/POP3S mocks | `cargo test protocols::pop3` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
