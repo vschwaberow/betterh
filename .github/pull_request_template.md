@@ -15,5 +15,6 @@
 - [ ] `cargo fmt --check` passes cleanly
 - [ ] `cargo clippy --all-targets --all-features --locked -- -D warnings` (zero warnings)
 - [ ] `cargo test` passes all unit and integration tests
+- [ ] `CHANGELOG.md` updated for user-visible changes (or N/A)
 - [ ] SPDX license headers present (`// SPDX-License-Identifier: MIT OR Apache-2.0` and `// Copyright (c) 2026 by Volker Schwaberow <volker@schwaberow.de>`)
 - [ ] Zero `.unwrap()` / `.expect()` in protocol and engine runtime code paths

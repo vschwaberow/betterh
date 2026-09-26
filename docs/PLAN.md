@@ -441,6 +441,12 @@ cargo fmt --check
   - **Files**: `.github/dependabot.yml`, `docs/SPEC.md` §17, this PLAN entry
   - **Verify**: File review against GitHub Dependabot schema; CI remains green.
 
+- [x] **Task 7.6: Keep a Changelog**
+  - **Description**: Add root `CHANGELOG.md` (Keep a Changelog + SemVer) and require user-visible PRs to update it. Record the post-init history under `[Unreleased]` and the baseline as `[0.1.0]`.
+  - **Acceptance**: `CHANGELOG.md` exists; README and SPEC project tree link to it; PLAN documents the maintenance rule.
+  - **Files**: `CHANGELOG.md`, `README.md`, `docs/SPEC.md`, this PLAN entry
+  - **Verify**: Manual review that recent merged PRs (#1–#4) appear under the correct sections.
+
 ## Verification Matrix
 
 | Area | Check | Command |
