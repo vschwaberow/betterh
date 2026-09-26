@@ -66,8 +66,8 @@ smtp = ["dep:base64", "dep:tokio-rustls"]
 mysql = ["dep:sha1", "dep:sha2", "dep:rsa", "dep:rand", "tls"]
 postgres = ["dep:md5", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:base64", "tls"]
 redis = []
-imap = ["dep:tokio-rustls"]
-ldap = ["dep:tokio-rustls"]
+imap = ["tls"]
+ldap = ["tls"]
 ```
 
 ### Dev Dependencies (Hermetic Testing)
