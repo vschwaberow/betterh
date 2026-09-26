@@ -17,6 +17,7 @@ postgres = ["dep:md5", "dep:sha2", "dep:hmac", "dep:pbkdf2", "dep:base64", "tls"
 redis = []
 imap = ["tls"]
 ldap = ["tls"]
+feasibility-smb = ["dep:md4", "dep:hmac", "dep:md5-hmac"]
 
 [dependencies]
 # Async Runtime & Concurrency
@@ -65,6 +66,8 @@ pbkdf2 = { version = "0.12", optional = true }
 rsa = { version = "0.9", optional = true, default-features = false, features = ["std", "pem"] }
 rand = { version = "0.8", optional = true }
 md5 = { version = "0.7", optional = true }
+md4 = { version = "0.10", optional = true }
+md5-hmac = { package = "md-5", version = "0.10", optional = true }
 tokio-rustls = { version = "0.26", optional = true }
 rustls = { version = "0.23", optional = true }
 rustls-pki-types = { version = "1", default-features = true, features = ["std"], optional = true }

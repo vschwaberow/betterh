@@ -11,6 +11,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- SMBv2/NTLMSSP feasibility prototype (`feasibility-smb`) and SPEC §5.2.D.1 wire analysis
 - CLI schemes and dry-run wiring for `redis`, `imap`/`imaps`, and `ldap`/`ldaps`
 - LDAP/LDAPS Simple Bind (RFC 4511 BER) with implicit TLS on port 636
 - IMAP/IMAPS LOGIN with STARTTLS and implicit TLS via shared `TransportStream`

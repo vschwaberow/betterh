@@ -347,10 +347,44 @@ pub trait ProtocolModule: Send + Sync {
     - Code `51` (`busy`) $\to$ `AuthResult::RateLimited(5s)`.
 
 #### D. Enterprise Protocol Feasibility & Architecture Track (Phase 11)
-- **SMBv2/v3 & RDP Feasibility Analysis**:
-  - SMBv2/v3 (TCP port 445): Requires NetBIOS framing (`0x00` length prefix), SMB2 Header (`0xFE 'SMB'`), NEGOTIATE dialogue, and SPNEGO / NTLMSSP Type 1 (Negotiate), Type 2 (Challenge), and Type 3 (Authenticate) calculation using NTLMv2 hashes.
-  - RDP (TCP port 3389): Requires ISO TPKT (RFC 1006) framing, X.224 Connection Request (`CR`), Negotiation Request (`RDP_NEG_REQ`), TLS upgrade, CredSSP framing, and NLA (Network Level Authentication) containing SPNEGO/NTLMv2 tokens.
-  - Architectural Boundary: Kept in a dedicated feasibility and prototyping phase to prevent bloated C-dependencies or unstable external crates while evaluating clean, pure Rust native framing.
+
+Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`src/feasibility/`, Cargo feature `feasibility-smb` / later `feasibility-rdp`) to prevent bloating default builds with enterprise framing while evaluating clean, pure Rust native codecs without C bindings (`libsmbclient`, `sspi`, OpenSSL CredSSP helpers, etc.).
+
+##### D.1 SMBv2/v3 & NTLMSSP (Task 11.1) — Feasibility
+
+- **Transport**: TCP/445. Each PDU is a NetBIOS session message: 1-byte type `0x00` + 3-byte big-endian length + SMB2 payload (length excludes the 4-byte NetBIOS header).
+- **SMB2 header** (64 bytes, little-endian fields after the protocol id):
+  - ProtocolId = `0xFE 'S' 'M' 'B'`
+  - StructureSize = 64, CreditCharge, Status, Command, Credits, Flags, NextCommand
+  - MessageId / AsyncId, TreeId, SessionId, 16-byte Signature
+- **Commands in scope for auth audit**:
+  1. `NEGOTIATE` (0x0000) — client dialects (SMB 2.0.2 … 3.1.1), security mode, capabilities; server returns selected dialect + security buffer (SPNEGO token).
+  2. `SESSION_SETUP` (0x0001) — carries SPNEGO / NTLMSSP tokens until session is established (`Status = STATUS_MORE_PROCESSING_REQUIRED` then `STATUS_SUCCESS`).
+- **Type-state sketch** (compile-time illegal transitions):
+  ```text
+  Disconnected → Negotiated → SessionChallenged → Authenticated
+  ```
+  Only `Negotiated` may emit `SESSION_SETUP` with NTLMSSP Type 1; only `SessionChallenged` may emit Type 3.
+- **SPNEGO (RFC 4178)**: NegTokenInit / NegTokenResp wrapping a single mech `1.3.6.1.4.1.311.2.2.10` (NTLMSSP). Feasibility prototype treats SPNEGO as an opaque OID + inner NTLMSSP blob; full ASN.1 choice encoding can stay minimal if the peer accepts raw NTLMSSP (common on Windows when SPNEGO is negotiated once).
+- **NTLMSSP (MS-NLMP) messages**:
+  - Type 1 Negotiate: flags (UNICODE, NTLM, TARGET_INFO, …), optional domain/workstation fields as offsets into a payload buffer.
+  - Type 2 Challenge: 8-byte server challenge, target name, target info AV_PAIRs (MsvAvNbDomainName, MsvAvNbComputerName, MsvAvTimestamp, …).
+  - Type 3 Authenticate: LM/NT responses, domain/user/workstation, optional MIC; **NTLMv2** NT proof:
+    - `NTOWFv2 = HMAC_MD5(MD4(UTF16LE(password)), UTF16LE(upper(user) + domain))`
+    - `NTProof = HMAC_MD5(NTOWFv2, serverChallenge || clientBlob)`
+- **Allocation / performance notes (Apollo / Betterh rules)**:
+  - Prefer stack arrays / `ArrayVec` for fixed SMB2 header and NetBIOS framing; one `Vec<u8>` scratch for variable AV_PAIR / Type 3 buffers reused across attempts.
+  - Hashing (MD4, HMAC-MD5) is CPU-bound → `tokio::task::spawn_blocking` at the ProtocolModule boundary; never hold TCP I/O across the hash.
+  - No `libsmbclient` / Samba FFI; optional deps limited to pure-Rust `md4` + existing `md5`/`hmac`.
+- **Go / no-go for production module**:
+  - **Go (prototype proven)**: NetBIOS + SMB2 header + NEGOTIATE encode/decode and NTLMSSP Type 1/2/3 framing with NTLMv2 proof are implementable in-tree without C.
+  - **Remaining before a full `ProtocolModule`**: dialect/feature negotiation edge cases (SMB 3.1.1 preauth hash), signing/sealing keys, guest/anonymous paths, and live interoperability fixtures — tracked as post-feasibility work, not MVP.
+- **Prototype location**: `src/feasibility/smb.rs` (feature = `feasibility-smb`), hermetic unit tests only (no live SMB server required for Phase 11.1).
+
+##### D.2 RDP / CredSSP / NLA (Task 11.2) — Placeholder
+
+- RDP (TCP port 3389): ISO TPKT (RFC 1006) framing, X.224 Connection Request (`CR`), Negotiation Request (`RDP_NEG_REQ`), TLS upgrade, CredSSP framing, and NLA containing SPNEGO/NTLMv2 tokens.
+- Detailed feasibility and prototype deferred to Task 11.2 (reuses NTLMSSP primitives from D.1 where possible).
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
@@ -713,6 +747,9 @@ betterh/
     │   ├── spray.rs          # Horizontal password spraying coordinator
     │   ├── targets.rs        # Target file and CIDR expansion
     │   └── wordlist.rs       # Streaming wordlist generator (O(1) RAM / -)
+    ├── feasibility/          # Phase 11 wire prototypes (feature-gated)
+    │   ├── mod.rs
+    │   └── smb.rs            # SMBv2/NTLMSSP framing prototype (feasibility-smb)
     ├── protocols/            # ProtocolModule trait and implementations
     │   ├── mod.rs            # ProtocolModule trait and registry
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests

@@ -669,10 +669,10 @@ cargo fmt --check
 **Goal**: Conduct architectural feasibility analysis, packet framing prototypes, and credential exchange validation for SMBv2/v3 (SPNEGO/NTLMSSP) and RDP (X.224, CredSSP, NLA) without heavy external C libraries.
 
 ### Tasks
-- [ ] **Task 11.1: SMBv2/v3 Protocol & NTLMSSP Framing Architectural Feasibility**
+- [x] **Task 11.1: SMBv2/v3 Protocol & NTLMSSP Framing Architectural Feasibility**
   - **Description**: Conduct architectural study and write pure Rust wire prototype for SMBv2/v3 NEGOTIATE dialogue, SPNEGO encapsulation, and NTLMSSP Type 1/2/3 authentication. Document wire structures, state machines, and benchmark against zero-allocation guidelines.
   - **Acceptance**: Feasibility document and test harness evaluating native SMB authentication without external C dependencies.
-  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`
+  - **Files**: `docs/SPEC.md` §5.2.D, `docs/PLAN.md`, `src/feasibility/smb.rs`, `Cargo.toml` (`feasibility-smb`)
 
 - [ ] **Task 11.2: RDP / CredSSP / NLA Framing Architectural Feasibility**
   - **Description**: Conduct architectural study and write pure Rust wire prototype for RDP X.224 connection request, TLS handshake, CredSSP framing, and NLA authentication token exchange.
