@@ -8,6 +8,8 @@ pub mod config;
 pub mod engine;
 pub mod feasibility;
 pub mod fsutil;
+#[cfg(feature = "mcp")]
+pub mod mcp;
 pub mod protocols;
 pub mod report;
 pub mod ui;
