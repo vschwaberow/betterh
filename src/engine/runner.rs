@@ -19,9 +19,10 @@ use crate::engine::scope::{Scope, ScopeError};
 use crate::engine::targets::{TargetError, expand};
 use crate::engine::wordlist::{CredentialInput, InputSource, WordlistError};
 use crate::engine::{
-    Attempt, Checkpoint, CheckpointEntry, Finding, FoundContext, Pacer, PoolConfig, PoolError,
-    RuntimeCommand, SkipRules, SkipState, SprayConfig, SprayRound, credentials, listen_keys,
-    on_discovery, prepare_target, run_brute, run_spray, save_checkpoint,
+    Attempt, Checkpoint, CheckpointEntry, Finding, FoundContext, MutationConfig, Pacer, PoolConfig,
+    PoolError, RuntimeCommand, SkipRules, SkipState, SprayConfig, SprayRound,
+    credentials_with_mutations, listen_keys, on_discovery, prepare_target, run_brute, run_spray,
+    save_checkpoint,
 };
 use crate::protocols::{Credential, ProtocolError, ProtocolModule, Target};
 use crate::report::{ReporterMode, SessionReporter};
@@ -84,6 +85,13 @@ pub async fn run_attack(
     let scope = Scope::load(cli.exclude.clone(), cli.exclude_file.as_deref()).await?;
     let timeout = Duration::from_secs(config.timeout_secs.get());
 
+    let rule_set = cli
+        .rules_file
+        .as_deref()
+        .map(crate::engine::mutations::RuleSet::from_file)
+        .transpose()
+        .map_err(WordlistError::from)?;
+
     let mut prepared = Vec::new();
     let mut stream = expand(input.clone(), scope.clone());
     while let Some(item) = stream.next().await {
@@ -100,7 +108,13 @@ pub async fn run_attack(
         ));
     }
 
-    let mut cred_stream = credentials(credential_input(cli, input)?, &cli.mangling)?;
+    let mutation_config = MutationConfig {
+        mangling: &cli.mangling,
+        rule_set: rule_set.as_ref(),
+        rule_year: cli.rule_year,
+    };
+    let mut cred_stream =
+        credentials_with_mutations(credential_input(cli, input)?, &mutation_config)?;
     let mut credentials_list = Vec::new();
     while let Some(item) = cred_stream.next().await {
         if cancel.is_cancelled() {

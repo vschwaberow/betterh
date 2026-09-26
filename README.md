@@ -60,6 +60,9 @@ betterh redis 127.0.0.1:6379 -P passwords.txt
 betterh imaps 127.0.0.1:993 -u alice -P passwords.txt --insecure
 betterh ldap://127.0.0.1:389 -u 'cn=alice,dc=example,dc=com' -P passwords.txt
 
+# Wordlist rules and seasonal mangling
+betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --rule-year 2026
+
 # Completions and man page
 eval "$(betterh completions bash)"
 betterh man > betterh.1
@@ -72,6 +75,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 | Area | What you get |
 | --- | --- |
 | Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind) |
+| Wordlists | $O(1)$ streaming wordlists; Hashcat rules (`--rules`); mangling (`-e n,s,r,y,c,l,C`); year overrides (`--rule-year`) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
 | Network | SOCKS5 / HTTP proxies, pacing, jitter, adaptive backoff |

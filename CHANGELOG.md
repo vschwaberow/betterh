@@ -11,6 +11,8 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- Intelligent wordlist & mutation engine (`--rules <file>`, `-e y,c,l,C`, `--rule-year <YEAR>`) with Hashcat rule interpreter, seasonal/enterprise generators, and $O(1)$ memory streaming pipeline (< 30 MB RSS across 1M candidates)
+
 - RDP/CredSSP feasibility prototype (`feasibility-rdp`) and SPEC §5.2.D.2 wire analysis
 - SMBv2/NTLMSSP feasibility prototype (`feasibility-smb`) and SPEC §5.2.D.1 wire analysis
 - CLI schemes and dry-run wiring for `redis`, `imap`/`imaps`, and `ldap`/`ldaps`

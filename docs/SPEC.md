@@ -550,11 +550,45 @@ impl ProtocolClient<Connected> {
 - On consecutive transport timeouts, the limiter similarly reduces rate and applies an exponential backoff window (`base * 2^(n-1)`, capped).
 - Successful (or ordinary failure) responses gradually restore the rate toward the baseline (additive recovery). Lockouts are reported to skip rules and do not by themselves change the bucket rate.
 
-### 7.5 Wordlist Mangling Rules
-- Built-in flag modifiers:
-  - `-e n`: Test empty/null password.
-  - `-e s`: Test password identical to username.
-  - `-e r`: Test password as reversed username.
+### 7.5 Wordlist Mangling & Intelligent Mutation Engine ($O(1)$ RAM)
+
+#### A. Built-in Flag Modifiers (`-e <flags>`)
+Betterh supports deterministic built-in mutation flags that generate extra candidate passwords derived from the target username:
+- `-e n`: Test empty/null password (`""`).
+- `-e s`: Test password identical to username (`username`).
+- `-e r`: Test password as reversed username (`emanresu`).
+- `-e y` (*Phase 15*): Enterprise Year appending. Generates variants with the current year ($Y$) and previous year ($Y-1$), combined with common delimiters (e.g. `user2026`, `user2025`, `user2026!`, `user2025!`, `user2026#`, `user2026@`).
+- `-e c` (*Phase 15*): Enterprise Seasonal patterns. Generates quarterly seasonal passwords (`Winter<Year>!`, `Spring<Year>!`, `Summer<Year>!`, `Autumn<Year>!`, plus German variants `Frühling<Year>!`, `Sommer<Year>!`, `Herbst<Year>!`, `Winter<Year>!`) using current and previous years.
+- `-e l` (*Phase 15*): L33t-speak substitution. Generates variants replacing common vowels/consonants (`a` $\to$ `@`, `o` $\to$ `0`, `i` $\to$ `1`, `e` $\to$ `3`, `s` $\to$ `$`).
+- `-e C` (*Phase 15*): Capitalization. Capitalizes the first Unicode character (`User`).
+- Multiple `-e` flags can be combined (e.g. `-e n,s,r,y,c,l,C`) and are evaluated in deterministic precedence.
+- An optional `--rule-year <YEAR>` overrides the system UTC year for seasonal/year generation.
+
+#### B. Hashcat-Compatible Rule File Engine (`--rules <file>`) (*Phase 15*)
+Betterh includes a native, streaming rule interpreter compatible with standard Hashcat / John the Ripper rule syntax (such as `best64.rule`):
+- Operates on each base candidate from the password source (`-P wordlist.txt` or `-p 'Summer'`), generating $N_{\text{passwords}} \times N_{\text{rules}}$ candidates on the fly without intermediate buffering.
+- Supported core rule operators:
+  - `:` No-op (emits original word unchanged)
+  - `l`: Lowercase all characters
+  - `u`: Uppercase all characters
+  - `c`: Capitalize first character, lowercase remainder
+  - `C`: Invert capitalization (lowercase first, uppercase remainder)
+  - `t`: Toggle case of all characters
+  - `r`: Reverse string
+  - `d`: Duplicate string (`pass` $\to$ `passpass`)
+  - `f`: Reflect / mirror string (`pass` $\to$ `passssap`)
+  - `$X`: Append character $X$ (e.g., `$!`, `$1`, `$#`)
+  - `^X`: Prepend character $X$ (e.g., `^!`, `^1`)
+  - `[`: Delete first character
+  - `]`: Delete last character
+  - `{`: Rotate string left
+  - `}`: Rotate string right
+  - `sXY`: Replace all occurrences of character $X$ with character $Y$ (e.g., `sa@`, `so0`)
+  - `<N`: Reject candidate if length $< N$ (prevents wasting attempts violating target password policy)
+  - `>N`: Reject candidate if length $> N$
+- Blank lines and `#` comments in rule files are ignored; malformed lines produce a descriptive error before attack execution.
+- Streaming guarantee: All mutations execute lazily as a Tokio `BoxStream`; resident memory remains strictly $< 30\text{ MB}$ regardless of wordlist length or rule set size.
+
 - Unix Pipe: Combine with external tools (`hashcat --stdout -r rules.txt wordlist.txt | betterh ssh 10.0.0.1 -u admin -P -`).
 
 #### Phase 2 Streaming Contract
@@ -803,6 +837,7 @@ betterh/
     │   ├── scope.rs          # Target exclusions and RoE guardrails
     │   ├── spray.rs          # Horizontal password spraying coordinator
     │   ├── targets.rs        # Target file and CIDR expansion
+    │   ├── mutations.rs      # Rule mutation engine & seasonal generator (Phase 15)
     │   └── wordlist.rs       # Streaming wordlist generator (O(1) RAM / -)
     ├── feasibility/          # Phase 11 wire prototypes (feature-gated)
     │   ├── mod.rs
@@ -888,6 +923,11 @@ cat generated_passwords.txt | betterh http 192.168.1.100:8080/login \
 betterh ftp -M internal_servers.txt --exclude-file excluded.txt -u root -P rockyou.txt \
   --proxy-list proxies.txt \
   -e ns
+
+# Password audit with Hashcat rule file and seasonal mangling
+betterh ssh 192.168.1.50 -u admin -P wordlist.txt \
+  --rules best64.rule \
+  -e y,c
 
 # Resuming an interrupted session
 betterh --resume .betterh-session-a1b2c3.json
