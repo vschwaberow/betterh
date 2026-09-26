@@ -1,6 +1,6 @@
 # Betterh
 
-Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, and SSH behind optional Cargo features.
+Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, and PostgreSQL behind optional Cargo features.
 
 **Authorized use only.** Use Betterh only on systems you own or are explicitly allowed to test.
 
@@ -31,6 +31,8 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`).
+
 ### Examples
 
 ```bash
@@ -48,6 +50,11 @@ cat passwords.txt | betterh http 127.0.0.1:8080/login \
   --fail-string 'Invalid credentials' \
   --format jsonl --output findings.jsonl
 
+# SMTP AUTH and database logins
+betterh smtp 127.0.0.1:587 -u alice -P passwords.txt
+betterh mysql://127.0.0.1:3306 -u root -P passwords.txt --database app
+betterh postgres 127.0.0.1:5432 -u alice -P passwords.txt --database app
+
 # Completions and man page
 eval "$(betterh completions bash)"
 betterh man > betterh.1
@@ -59,7 +66,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP, HTTP/HTTPS (Basic / form POST / Bearer), SSH (password or key) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`); MySQL (`mysql_native_password`); PostgreSQL (cleartext / MD5) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
 | Network | SOCKS5 / HTTP proxies, pacing, jitter, adaptive backoff |
