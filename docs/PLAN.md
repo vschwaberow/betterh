@@ -621,7 +621,7 @@ cargo fmt --check
   - **Files**: `src/protocols/redis.rs`, `src/protocols/mod.rs`
   - **Verify**: Hermetic mock tests in `src/protocols/redis.rs`.
 
-- [ ] **Task 10.2: IMAP/IMAPS Protocol Module & Mock Harness**
+- [x] **Task 10.2: IMAP/IMAPS Protocol Module & Mock Harness**
   - **Description**: Implement `ImapModule` (feature = `imap`, dependency = `tokio-rustls`) supporting ports 143 (plain/STARTTLS) and 993 (implicit IMAPS). Parse greeting `* OK`, negotiate STARTTLS via `TransportStream` on 143 or wrap on 993, send tagged `A001 LOGIN "<username>" "<password>"\r\n`. Map `OK` to Success, `NO` to Failure, `* BYE` to RateLimited(5s). Send clean `LOGOUT`. SOCKS5 proxy support.
   - **Acceptance**: Authenticates against mock IMAP server for plain, STARTTLS, and IMAPS.
   - **Files**: `src/protocols/imap.rs`, `src/protocols/mod.rs`
