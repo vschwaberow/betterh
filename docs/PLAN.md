@@ -429,6 +429,12 @@ cargo fmt --check
   - **Files**: `README.md`, `docs/SPEC.md` (project tree), this PLAN entry
   - **Verify**: Manual review that README examples match live CLI help / SPEC §11.
 
+- [x] **Task 7.4: Dual-License Text Files**
+  - **Description**: Add `LICENSE-MIT` and `LICENSE-APACHE` at the repository root so the Cargo `MIT OR Apache-2.0` declaration is backed by the full license texts.
+  - **Acceptance**: Both files are present; README License section points to them.
+  - **Files**: `LICENSE-MIT`, `LICENSE-APACHE`, `README.md`, `docs/SPEC.md` (project tree), this PLAN entry
+  - **Verify**: Files match the SPDX identifiers used in source headers.
+
 ## Verification Matrix
 
 | Area | Check | Command |

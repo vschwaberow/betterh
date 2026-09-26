@@ -80,7 +80,7 @@ cargo test --all-features --locked
 
 ## License
 
-MIT OR Apache-2.0. Every Rust source file starts with:
+Dual-licensed under [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE). Every Rust source file starts with:
 
 ```text
 // SPDX-License-Identifier: MIT OR Apache-2.0
