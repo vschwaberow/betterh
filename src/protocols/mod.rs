@@ -194,7 +194,7 @@ pub use winrm::WinrmModule;
 pub use pop3::Pop3Module;
 
 #[cfg(feature = "kerberos")]
-pub use kerberos::KerberosModule;
+pub use kerberos::{EtypeMode as KerberosEtypeMode, KerberosModule};
 
 #[cfg(feature = "snmp")]
 pub use snmp::SnmpModule;

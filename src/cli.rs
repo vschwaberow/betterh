@@ -105,6 +105,9 @@ pub struct ModuleOptions {
     /// Kerberos realm override (default: derived from FQDN host).
     #[arg(long = "realm", value_name = "REALM")]
     pub realm: Option<String>,
+    /// Kerberos pre-auth etype (`auto`, `aes256`, `aes128`, or `rc4`).
+    #[arg(long = "kerberos-etype", value_parser = ["auto", "aes256", "aes128", "rc4"], default_value = "auto")]
+    pub kerberos_etype: String,
     /// SNMP protocol version (`1`, `2c`, or `3`).
     #[arg(long = "snmp-version", value_parser = ["1", "2c", "3"], default_value = "2c")]
     pub snmp_version: String,

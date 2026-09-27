@@ -95,6 +95,8 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 ## Develop
 
+Kerberos etypes: `--kerberos-etype auto|aes256|aes128|rc4` (default auto from KDC `ETYPE-INFO2`).
+
 SNMPv3 privacy: `--snmp-version 3 --snmp-auth sha|md5 --snmp-priv aes|des` (optional `--snmp-priv-password`).
 
 Protocol decoder fuzzing (nightly + `cargo-fuzz`):

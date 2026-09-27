@@ -20,9 +20,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
 
 use self::codec::{
-    KdcMessage, decode_kdc_message, encode_as_req, frame_tcp, salt_from_edata, unframe_tcp,
+    KdcMessage, PreAuthMaterial, decode_kdc_message, encode_as_req, frame_tcp, preauth_from_edata,
+    unframe_tcp,
 };
-use self::crypto::{aes256_string_to_key, build_pa_enc_timestamp};
+use self::crypto::{build_pa_enc_timestamp, string_to_key};
 use super::io::dial;
 use super::{AuthResult, Credential, ProtocolError, ProtocolModule, Target};
 
@@ -77,11 +78,34 @@ pub fn fuzz_decode(data: &[u8]) {
     }
 }
 
+/// CLI / module etype selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EtypeMode {
+    #[default]
+    Auto,
+    Aes256,
+    Aes128,
+    Rc4,
+}
+
+impl EtypeMode {
+    #[must_use]
+    pub const fn forced_etype(self) -> Option<i32> {
+        match self {
+            Self::Auto => None,
+            Self::Aes256 => Some(ETYPE_AES256),
+            Self::Aes128 => Some(ETYPE_AES128),
+            Self::Rc4 => Some(ETYPE_RC4_HMAC),
+        }
+    }
+}
+
 /// Kerberos AS-REQ authentication module.
 #[derive(Debug, Default, Clone)]
 pub struct KerberosModule {
     proxy: Option<String>,
     realm: Option<String>,
+    etype: EtypeMode,
 }
 
 impl KerberosModule {
@@ -90,6 +114,7 @@ impl KerberosModule {
         Self {
             proxy: None,
             realm: None,
+            etype: EtypeMode::Auto,
         }
     }
 
@@ -102,6 +127,12 @@ impl KerberosModule {
     #[must_use]
     pub fn with_realm(mut self, realm: Option<String>) -> Self {
         self.realm = realm.map(|r| r.to_ascii_uppercase());
+        self
+    }
+
+    #[must_use]
+    pub fn with_etype(mut self, etype: EtypeMode) -> Self {
+        self.etype = etype;
         self
     }
 
@@ -140,10 +171,11 @@ impl ProtocolModule for KerberosModule {
         let user = credential.username.clone();
         let password = credential.password.clone().unwrap_or_default();
         let proxy = self.proxy.clone();
+        let forced = self.etype.forced_etype();
 
         timeout(timeout_budget, async move {
             let mut stream = dial(target, proxy.as_deref()).await?;
-            run_as_exchange(&mut stream, &realm, &user, &password).await
+            run_as_exchange(&mut stream, &realm, &user, &password, forced).await
         })
         .await
         .map_err(|_| ProtocolError::Timeout)?
@@ -155,23 +187,23 @@ async fn run_as_exchange(
     realm: &str,
     user: &str,
     password: &str,
+    forced_etype: Option<i32>,
 ) -> Result<AuthResult, ProtocolError> {
     let nonce = fastrand::u32(..);
     let till = far_future_kerberos_time();
 
-    // Stage 1: no PA — learn salt (or proceed with default).
+    // Stage 1: no PA — learn salt / etype (or proceed with default).
     let stage1 = encode_as_req(realm, user, nonce, &till, vec![]);
     write_framed(stream, &stage1).await?;
     let resp1 = read_framed(stream).await?;
-    let salt = match decode_kdc_message(&resp1)? {
+    let material = match decode_kdc_message(&resp1)? {
         KdcMessage::AsRep => {
             // Rare: no-preauth account → success without password proof.
-            // Treat as Success for auth-audit (account accepts AS without PA).
             return Ok(AuthResult::Success);
         }
         KdcMessage::Error { code, e_data } => {
             if code == error_codes::KDC_ERR_PREAUTH_REQUIRED {
-                salt_from_edata(e_data.as_deref(), realm, user)
+                preauth_from_edata(e_data.as_deref(), realm, user, forced_etype)
             } else if code == error_codes::KDC_ERR_C_PRINCIPAL_UNKNOWN
                 || code == error_codes::KDC_ERR_CLIENT_REVOKED
                 || code == error_codes::KDC_ERR_SVC_UNAVAILABLE
@@ -179,19 +211,25 @@ async fn run_as_exchange(
             {
                 return Ok(map_kdc_error(code));
             } else {
-                // Unexpected error — still try stage 2 with default salt.
-                format!("{realm}{user}")
+                PreAuthMaterial {
+                    salt: format!("{realm}{user}"),
+                    etype: forced_etype.unwrap_or(ETYPE_AES256),
+                    iterations: 4096,
+                }
             }
         }
     };
 
     let password_owned = password.to_owned();
-    let salt_owned = salt.clone();
+    let salt_owned = material.salt.clone();
+    let etype = material.etype;
+    let iterations = material.iterations;
     let key = tokio::task::spawn_blocking(move || {
-        aes256_string_to_key(&password_owned, salt_owned.as_bytes(), 4096)
+        string_to_key(etype, &password_owned, salt_owned.as_bytes(), iterations)
     })
     .await
-    .map_err(|error| ProtocolError::Internal(format!("Kerberos key worker failed: {error}")))?;
+    .map_err(|error| ProtocolError::Internal(format!("Kerberos key worker failed: {error}")))?
+    .ok_or_else(|| ProtocolError::HandshakeFailed(format!("unsupported Kerberos etype {etype}")))?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
