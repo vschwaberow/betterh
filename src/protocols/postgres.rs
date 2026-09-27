@@ -638,6 +638,28 @@ impl ProtocolModule for PostgresModule {
     }
 }
 
+/// Fuzz entry: walk Postgres 3.0 message frames and auth payloads.
+pub fn fuzz_parse_messages(mut data: &[u8]) {
+    let mut steps = 0usize;
+    while data.len() >= 5 && steps < 256 {
+        let len = usize::try_from(u32::from_be_bytes([data[1], data[2], data[3], data[4]]))
+            .unwrap_or(usize::MAX);
+        if !(4..=16 * 1024).contains(&len) || data.len() < 1 + len {
+            break;
+        }
+        let payload = &data[5..=len];
+        let _ = parse_sasl_mechanisms(payload);
+        let _ = parse_error_response(payload);
+        if let Ok(s) = std::str::from_utf8(payload) {
+            let _ = parse_server_first(s);
+        }
+        data = &data[1 + len..];
+        steps += 1;
+    }
+    let _ = parse_sasl_mechanisms(data);
+    let _ = parse_error_response(data);
+}
+
 #[cfg(test)]
 mod tests {
     use tokio::net::TcpListener;

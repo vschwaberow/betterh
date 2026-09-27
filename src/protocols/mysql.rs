@@ -653,6 +653,22 @@ impl ProtocolModule for MysqlModule {
     }
 }
 
+/// Fuzz entry: interpret buffer as `MySQL` packet payload / handshake / ERR.
+pub fn fuzz_parse_packets(data: &[u8]) {
+    if data.len() >= 4 {
+        let payload_len = usize::try_from(u32::from_le_bytes([data[0], data[1], data[2], 0]))
+            .unwrap_or(usize::MAX);
+        if payload_len <= 16 * 1024 && data.len() >= 4 + payload_len {
+            let payload = &data[4..4 + payload_len];
+            let _ = parse_handshake_v10(payload);
+            let _ = parse_err_packet(payload);
+            let _ = parse_auth_switch(payload);
+        }
+    }
+    let _ = parse_handshake_v10(data);
+    let _ = parse_err_packet(data);
+}
+
 #[cfg(test)]
 mod tests {
     use rsa::pkcs8::EncodePublicKey;

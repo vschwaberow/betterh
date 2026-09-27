@@ -254,6 +254,11 @@ fn parse_ber_length(bytes: &[u8]) -> Result<(usize, usize), ProtocolError> {
     for byte in &bytes[1..=nbytes] {
         len = (len << 8) | usize::from(*byte);
     }
+    if len > 16 * 1024 {
+        return Err(ProtocolError::HandshakeFailed(
+            "BER length exceeds maximum".into(),
+        ));
+    }
     Ok((len, 1 + nbytes))
 }
 
@@ -391,6 +396,24 @@ impl ProtocolModule for LdapModule {
 
         Ok(result)
     }
+}
+
+/// Fuzz entry: walk BER TLVs without panicking on adversarial lengths.
+///
+/// # Errors
+///
+/// Returns [`ProtocolError`] when a TLV is malformed or the walk stalls.
+pub fn fuzz_walk_ber(mut bytes: &[u8]) -> Result<(), ProtocolError> {
+    let mut steps = 0usize;
+    while !bytes.is_empty() && steps < 256 {
+        let (_tag, _value, consumed) = parse_tlv(bytes)?;
+        if consumed == 0 || consumed > bytes.len() {
+            return Err(ProtocolError::HandshakeFailed("BER walk stalled".into()));
+        }
+        bytes = &bytes[consumed..];
+        steps += 1;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

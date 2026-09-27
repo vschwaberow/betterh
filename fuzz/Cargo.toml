@@ -1,0 +1,61 @@
+[package]
+name = "betterh-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+betterh = { path = "..", default-features = false, features = ["smb", "rdp", "mssql", "kerberos", "snmp", "ldap", "mysql", "postgres"] }
+
+[[bin]]
+name = "fuzz_smb_decode"
+path = "fuzz_targets/fuzz_smb_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_rdp_decode"
+path = "fuzz_targets/fuzz_rdp_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_tds_decode"
+path = "fuzz_targets/fuzz_tds_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_kerberos_decode"
+path = "fuzz_targets/fuzz_kerberos_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_snmp_decode"
+path = "fuzz_targets/fuzz_snmp_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ldap_ber"
+path = "fuzz_targets/fuzz_ldap_ber.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_db_codecs"
+path = "fuzz_targets/fuzz_db_codecs.rs"
+test = false
+doc = false
+bench = false

@@ -86,6 +86,9 @@ impl NetbiosMessage {
         }
         let len =
             (usize::from(bytes[1]) << 16) | (usize::from(bytes[2]) << 8) | usize::from(bytes[3]);
+        if len > 64 * 1024 {
+            return Err("NetBIOS length exceeds maximum");
+        }
         if bytes.len() < 4 + len {
             return Err("NetBIOS payload truncated");
         }

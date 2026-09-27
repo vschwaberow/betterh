@@ -225,6 +225,12 @@ impl SnmpModule {
     }
 }
 
+/// Panic-free SNMP decoder surface for fuzzing.
+pub fn fuzz_decode(data: &[u8]) {
+    let _ = codec::decode_community_response(data);
+    let _ = usm::decode_discovery_report(data);
+}
+
 #[async_trait]
 impl ProtocolModule for SnmpModule {
     fn name(&self) -> &'static str {

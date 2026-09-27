@@ -1,0 +1,46 @@
+name: Fuzz smoke
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz-api-stable:
+    name: fuzz_api unit smoke (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test fuzz_api
+        run: cargo test protocols::fuzz_api --all-features --locked
+
+  fuzz-libfuzzer:
+    name: cargo-fuzz seed smoke (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build
+      - name: Seed smoke (500 runs / target)
+        run: |
+          set -euo pipefail
+          for target in fuzz_smb_decode fuzz_rdp_decode fuzz_tds_decode fuzz_kerberos_decode fuzz_snmp_decode fuzz_ldap_ber fuzz_db_codecs; do
+            echo "::group::$target"
+            cargo fuzz run "$target" -- -runs=500 -max_len=65536
+            echo "::endgroup::"
+          done

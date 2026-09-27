@@ -95,6 +95,17 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 ## Develop
 
+Protocol decoder fuzzing (nightly + `cargo-fuzz`):
+
+```bash
+cargo install cargo-fuzz
+cargo fuzz list
+cargo fuzz run fuzz_snmp_decode -- -runs=10000
+```
+
+Stable smoke without nightly: `cargo test protocols::fuzz_api --all-features`.
+
+
 ```bash
 cargo fmt --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
