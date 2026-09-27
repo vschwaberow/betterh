@@ -7,8 +7,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpStream,
+    io::{AsyncWriteExt, BufReader},
     time::timeout,
 };
 
@@ -42,13 +41,7 @@ impl ImapClient<Disconnected> {
         proxy: Option<&str>,
         insecure: bool,
     ) -> Result<ImapClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let tcp = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let tcp = super::io::dial(target, proxy).await?;
 
         // Implicit IMAPS: wrap before reading the greeting.
         let (transport, already_tls) = if target.ssl || target.port == 993 {
@@ -250,17 +243,7 @@ async fn write_line(
 }
 
 async fn read_line(stream: &mut BufReader<TransportStream>) -> Result<String, ProtocolError> {
-    let mut line = String::new();
-    let n = stream
-        .read_line(&mut line)
-        .await
-        .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?;
-    if n == 0 {
-        return Err(ProtocolError::ConnectionError(
-            "IMAP peer closed the connection".into(),
-        ));
-    }
-    Ok(line)
+    super::io::read_crlf_line(stream).await
 }
 
 async fn read_until_tagged(

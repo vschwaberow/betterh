@@ -41,18 +41,12 @@ impl SshModule {
         target: &Target,
         timeout_budget: Duration,
     ) -> Result<TcpStream, ProtocolError> {
-        let addr = target.dial_addr();
-        let connect = async {
-            match self.proxy.as_deref() {
-                None => TcpStream::connect(&addr)
-                    .await
-                    .map_err(|error| ProtocolError::ConnectionError(error.to_string())),
-                Some(proxy) => super::socks::connect_socks5(proxy, &addr).await,
-            }
-        };
-        timeout(timeout_budget, connect)
-            .await
-            .map_err(|_| ProtocolError::Timeout)?
+        timeout(
+            timeout_budget,
+            super::io::dial(target, self.proxy.as_deref()),
+        )
+        .await
+        .map_err(|_| ProtocolError::Timeout)?
     }
 
     async fn authenticate_inner(

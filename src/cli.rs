@@ -19,73 +19,7 @@ use crate::{
     protocols::Target,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Service {
-    Ftp,
-    Ssh,
-    Http,
-    Https,
-    Smtp,
-    Smtps,
-    Mysql,
-    Postgres,
-    Redis,
-    Imap,
-    Imaps,
-    Ldap,
-    Ldaps,
-    Smb,
-    Rdp,
-}
-
-impl Service {
-    #[must_use]
-    pub const fn default_port(self) -> u16 {
-        match self {
-            Self::Ftp => 21,
-            Self::Ssh => 22,
-            Self::Http => 80,
-            Self::Https => 443,
-            Self::Smtp => 25,
-            Self::Smtps => 465,
-            Self::Mysql => 3306,
-            Self::Postgres => 5432,
-            Self::Redis => 6379,
-            Self::Imap => 143,
-            Self::Imaps => 993,
-            Self::Ldap => 389,
-            Self::Ldaps => 636,
-            Self::Smb => 445,
-            Self::Rdp => 3389,
-        }
-    }
-
-    const fn is_http(self) -> bool {
-        matches!(self, Self::Http | Self::Https)
-    }
-
-    const fn is_database(self) -> bool {
-        matches!(self, Self::Mysql | Self::Postgres)
-    }
-
-    pub(crate) const fn uses_ssl(self) -> bool {
-        matches!(self, Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps)
-    }
-
-    pub(crate) const fn allows_insecure(self) -> bool {
-        matches!(
-            self,
-            Self::Https
-                | Self::Smtp
-                | Self::Smtps
-                | Self::Imap
-                | Self::Imaps
-                | Self::Ldap
-                | Self::Ldaps
-                | Self::Rdp
-        )
-    }
-}
+pub use crate::service::Service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AttackMode {
@@ -397,26 +331,12 @@ fn invalid(message: &str) -> clap::Error {
 }
 
 fn parse_service(value: &str) -> Result<Service, clap::Error> {
-    match value.to_ascii_lowercase().as_str() {
-        "ftp" => Ok(Service::Ftp),
-        "ssh" => Ok(Service::Ssh),
-        "http" => Ok(Service::Http),
-        "https" => Ok(Service::Https),
-        "smtp" => Ok(Service::Smtp),
-        "smtps" => Ok(Service::Smtps),
-        "mysql" => Ok(Service::Mysql),
-        "postgres" | "postgresql" => Ok(Service::Postgres),
-        "redis" => Ok(Service::Redis),
-        "imap" => Ok(Service::Imap),
-        "imaps" => Ok(Service::Imaps),
-        "ldap" => Ok(Service::Ldap),
-        "ldaps" => Ok(Service::Ldaps),
-        "smb" => Ok(Service::Smb),
-        "rdp" => Ok(Service::Rdp),
-        _ => Err(invalid(
-            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp",
-        )),
-    }
+    Service::from_scheme(value).ok_or_else(|| {
+        invalid(&format!(
+            "Supported services: {}",
+            Service::supported_schemes()
+        ))
+    })
 }
 
 pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
@@ -478,24 +398,7 @@ pub(crate) fn parse_positional(service: Service, value: &str) -> Result<TargetSo
         Ok(IpAddr::V6(ip)) => format!("[{ip}]"),
         _ => value.to_owned(),
     };
-    let scheme = match service {
-        Service::Ftp => "ftp",
-        Service::Ssh => "ssh",
-        Service::Http => "http",
-        Service::Https => "https",
-        Service::Smtp => "smtp",
-        Service::Smtps => "smtps",
-        Service::Mysql => "mysql",
-        Service::Postgres => "postgres",
-        Service::Redis => "redis",
-        Service::Imap => "imap",
-        Service::Imaps => "imaps",
-        Service::Ldap => "ldap",
-        Service::Ldaps => "ldaps",
-        Service::Smb => "smb",
-        Service::Rdp => "rdp",
-    };
-    Ok(parse_url(&format!("{scheme}://{host}"))?.source)
+    Ok(parse_url(&format!("{}://{host}", service.scheme()))?.source)
 }
 
 fn parse_network(value: &str) -> Result<IpNet, String> {

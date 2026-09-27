@@ -6,6 +6,9 @@
 //! Auth-only: TPKT / X.224 negotiate → TLS → `CredSSP` `TSRequest`. No graphics,
 //! channels, or Kerberos. Extended `CredSSP` (`PROTOCOL_HYBRID_EX`) is accepted when
 //! selected; binding uses `CredSSP` version 6 `clientNonce` + SHA-256 (MS-CSSP).
+//!
+//! Oversized on purpose: `CredSSP` wire + hermetic mocks stay colocated; `NTLMv2`
+//! proofs reuse `protocols::smb` helpers.
 
 use std::time::Duration;
 
@@ -873,13 +876,7 @@ impl RdpClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<Self, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         self.stream = Some(stream);
         Ok(self)
     }

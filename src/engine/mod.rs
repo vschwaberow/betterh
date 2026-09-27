@@ -9,6 +9,7 @@ pub mod canary;
 pub mod checkpoint;
 pub mod dryrun;
 pub mod keys;
+pub mod modules;
 pub mod mutations;
 pub mod pool;
 pub mod proxy;

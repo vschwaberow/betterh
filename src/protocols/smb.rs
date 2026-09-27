@@ -2,6 +2,9 @@
 // Copyright (c) 2026 by Volker Schwaberow <volker@schwaberow.de>
 
 //! `SMBv2` authentication over TCP/445 (`NEGOTIATE` → `SESSION_SETUP`, `NTLMv2`).
+//!
+//! Oversized on purpose: `NTLMv2` wire + hermetic mocks stay colocated; session-key
+//! helpers are reused by the RDP `CredSSP` module.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -601,13 +604,7 @@ impl SmbClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<SmbClient<Disconnected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         Ok(SmbClient {
             stream: Some(stream),
             state: Disconnected,

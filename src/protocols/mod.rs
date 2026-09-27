@@ -3,6 +3,19 @@
 
 //! Authentication contract shared by native protocol modules.
 
+#[cfg(any(
+    feature = "ftp",
+    feature = "ssh",
+    feature = "smtp",
+    feature = "mysql",
+    feature = "postgres",
+    feature = "redis",
+    feature = "imap",
+    feature = "ldap",
+    feature = "smb",
+    feature = "rdp"
+))]
+pub mod io;
 pub mod mock;
 #[cfg(any(
     feature = "ftp",

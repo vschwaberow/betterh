@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncWriteExt, BufReader},
     net::TcpStream,
     time::timeout,
 };
@@ -35,13 +35,7 @@ impl RedisClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<RedisClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         Ok(RedisClient {
             stream: Some(BufReader::new(stream)),
             _state: Connected,
@@ -119,17 +113,7 @@ async fn write_command(
 }
 
 async fn read_line(stream: &mut BufReader<TcpStream>) -> Result<String, ProtocolError> {
-    let mut line = String::new();
-    let n = stream
-        .read_line(&mut line)
-        .await
-        .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?;
-    if n == 0 {
-        return Err(ProtocolError::ConnectionError(
-            "Redis peer closed the connection".into(),
-        ));
-    }
-    Ok(line)
+    super::io::read_crlf_line(stream).await
 }
 
 fn normalize_reply(line: &str) -> &str {
