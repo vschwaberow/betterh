@@ -22,6 +22,7 @@ use self::codec::{
 use self::usm::{
     AuthProtocol, PrivProtocol, decode_authenticated_response, decode_discovery_report,
     encode_authenticated_get_request, encode_discovery_request, password_to_key,
+    password_to_priv_key,
 };
 use super::{AuthResult, CanaryStatus, Credential, ProtocolError, ProtocolModule, Target};
 
@@ -180,13 +181,6 @@ impl SnmpModule {
         auth_password: &str,
         timeout: Duration,
     ) -> Result<AuthResult, ProtocolError> {
-        if self.priv_protocol != PrivProtocol::None {
-            let _ = self.priv_password.as_deref().unwrap_or(auth_password);
-            return Err(ProtocolError::Internal(
-                "SNMPv3 privacy (DES/AES) is not enabled in this build; use --snmp-priv none"
-                    .into(),
-            ));
-        }
         let addr = self.resolve_addr(target).await?;
         let msg_id = i32::try_from(self.next_id() & 0x7fff_ffff).unwrap_or(1);
         let req_id = i32::try_from(self.next_id() & 0x7fff_ffff).unwrap_or(1);
@@ -201,8 +195,16 @@ impl SnmpModule {
             return Ok(AuthResult::Failure);
         };
         let auth_key = password_to_key(auth_password.as_bytes(), &engine.engine_id, self.auth);
+        let priv_password = self.priv_password.as_deref().unwrap_or(auth_password);
+        let priv_key = password_to_priv_key(
+            priv_password.as_bytes(),
+            &engine.engine_id,
+            self.auth,
+            self.priv_protocol,
+        );
         let msg_id = i32::try_from(self.next_id() & 0x7fff_ffff).unwrap_or(1);
         let req_id = i32::try_from(self.next_id() & 0x7fff_ffff).unwrap_or(1);
+        let priv_salt = u64::from(self.next_id()) << 32 | u64::from(self.next_id());
         let request = encode_authenticated_get_request(
             msg_id,
             req_id,
@@ -211,6 +213,8 @@ impl SnmpModule {
             &auth_key,
             self.auth,
             self.priv_protocol,
+            &priv_key,
+            priv_salt,
         )
         .map_err(|error| ProtocolError::Internal(error.to_string()))?;
         let response = match self.exchange(addr, &request, timeout).await {
@@ -218,7 +222,13 @@ impl SnmpModule {
             Err(ProtocolError::Timeout) => return Ok(AuthResult::Failure),
             Err(error) => return Err(error),
         };
-        match decode_authenticated_response(&response, &auth_key, self.auth) {
+        match decode_authenticated_response(
+            &response,
+            &auth_key,
+            self.auth,
+            self.priv_protocol,
+            &priv_key,
+        ) {
             Ok(_) => Ok(AuthResult::Success),
             Err(_) => Ok(AuthResult::Failure),
         }

@@ -469,7 +469,7 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 
 - **Transport**: UDP/161; rate-paced UDP transport engine with packet-loss backoff.
 - **SNMPv1 & v2c**: ASN.1 BER `GetRequest-PDU` (`sysDescr.0`) with community strings (`public`, `private`).
-- **SNMPv3 USM**: Discovery probe (`Report-PDU` engine ID extraction), key localization (RFC 3414), authentication (`usmHMACMD5AuthProtocol`, `usmHMACSHAAuthProtocol`) for authNoPriv; privacy flags (`usmDESPrivProtocol`, `usmAesCfb128Protocol`) accepted on CLI and rejected until wire encrypt/decrypt lands.
+- **SNMPv3 USM**: Discovery probe (`Report-PDU` engine ID extraction), key localization (RFC 3414), authentication (`usmHMACMD5AuthProtocol`, `usmHMACSHAAuthProtocol`) for authNoPriv and authPriv; privacy (`usmDESPrivProtocol` DES-CBC, `usmAesCfb128Protocol` AES-128-CFB per RFC 3826) encrypts scoped PDUs with `--snmp-priv des|aes` and optional `--snmp-priv-password`.
 - **Security**: Never log community strings or localized keys; bounded UDP timeouts.
 - **Module**: `src/protocols/snmp/` (feature = `snmp`).
 
@@ -479,6 +479,13 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Targets**: `fuzz_smb_decode`, `fuzz_rdp_decode`, `fuzz_tds_decode`, `fuzz_kerberos_decode`, `fuzz_snmp_decode`, `fuzz_ldap_ber`, `fuzz_db_codecs`.
 - **Invariants**: Panic-free and bounded allocation on adversarial inputs; max packet ceiling of 64 KB via `protocols::fuzz_api`.
 - **Directory**: `fuzz/` (+ CI smoke in `.github/workflows/fuzz.yml`).
+
+#### N. SNMPv3 USM Privacy (Phase 24)
+
+- **Algorithms**: DES-CBC (RFC 3414 §8) with zero padding; AES-128-CFB (RFC 3826) with boots/time/salt IV.
+- **Keys**: Privacy key is the first 16 octets of the localized USM key from the auth password (or dedicated priv password).
+- **CLI**: `--snmp-priv none|des|aes`, `--snmp-priv-password` (defaults to auth password).
+- **Module**: `src/protocols/snmp/usm.rs` (+ `aes`/`des`/`cbc`/`cfb-mode` feature deps).
 
 ## 6. Idiomatic Rust Architecture & Patterns
 
