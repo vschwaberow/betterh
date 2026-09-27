@@ -6,7 +6,7 @@ description = "A modern, high-performance, memory-safe network authentication au
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap", "smb", "rdp", "mssql", "winrm", "mcp"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap", "smb", "rdp", "mssql", "winrm", "pop3", "mcp"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]

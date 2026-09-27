@@ -38,6 +38,7 @@ pub(crate) fn build_module(
         Service::Rdp => rdp_module(cli, proxy),
         Service::Mssql => mssql_module(cli, proxy),
         Service::Winrm | Service::Winrms => winrm_module(cli, proxy),
+        Service::Pop3 | Service::Pop3s => pop3_module(cli, proxy),
     }
 }
 
@@ -212,4 +213,14 @@ fn winrm_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModu
             "WinRM support was not compiled in (enable feature `winrm`)".into(),
         ))
     }
+}
+
+fn pop3_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!(
+        "pop3",
+        "POP3",
+        crate::protocols::Pop3Module::new()
+            .with_proxy(proxy)
+            .with_insecure(cli.module.insecure)
+    )
 }

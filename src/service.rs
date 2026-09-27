@@ -26,6 +26,8 @@ pub enum Service {
     Mssql,
     Winrm,
     Winrms,
+    Pop3,
+    Pop3s,
 }
 
 impl Service {
@@ -51,6 +53,8 @@ impl Service {
             Self::Mssql => 1433,
             Self::Winrm => 5985,
             Self::Winrms => 5986,
+            Self::Pop3 => 110,
+            Self::Pop3s => 995,
         }
     }
 
@@ -76,13 +80,15 @@ impl Service {
             Self::Mssql => "mssql",
             Self::Winrm => "winrm",
             Self::Winrms => "winrms",
+            Self::Pop3 => "pop3",
+            Self::Pop3s => "pop3s",
         }
     }
 
     /// Human-readable list of supported scheme tokens for diagnostics.
     #[must_use]
     pub const fn supported_schemes() -> &'static str {
-        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms"
+        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms, pop3, pop3s"
     }
 
     #[must_use]
@@ -106,7 +112,7 @@ impl Service {
     pub(crate) const fn uses_ssl(self) -> bool {
         matches!(
             self,
-            Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps | Self::Winrms
+            Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps | Self::Winrms | Self::Pop3s
         )
     }
 
@@ -125,6 +131,8 @@ impl Service {
                 | Self::Rdp
                 | Self::Mssql
                 | Self::Winrms
+                | Self::Pop3
+                | Self::Pop3s
         )
     }
 
@@ -153,6 +161,8 @@ impl Service {
             "mssql" => Some(Self::Mssql),
             "winrm" => Some(Self::Winrm),
             "winrms" => Some(Self::Winrms),
+            "pop3" => Some(Self::Pop3),
+            "pop3s" => Some(Self::Pop3s),
             _ => None,
         }
     }

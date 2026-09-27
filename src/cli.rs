@@ -298,7 +298,7 @@ impl Cli {
         }
         if module.insecure && !service.allows_insecure() {
             return Err(invalid(
-                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp, mssql, winrms)",
+                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp, mssql, winrms, pop3/pop3s)",
             ));
         }
         if module.ssh_key.is_some() && service != Service::Ssh {
