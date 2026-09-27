@@ -88,6 +88,9 @@ pub mod pop3;
 #[cfg(feature = "kerberos")]
 pub mod kerberos;
 
+#[cfg(feature = "snmp")]
+pub mod snmp;
+
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -190,3 +193,6 @@ pub use pop3::Pop3Module;
 
 #[cfg(feature = "kerberos")]
 pub use kerberos::KerberosModule;
+
+#[cfg(feature = "snmp")]
+pub use snmp::SnmpModule;

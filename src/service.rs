@@ -29,6 +29,7 @@ pub enum Service {
     Pop3,
     Pop3s,
     Kerberos,
+    Snmp,
 }
 
 impl Service {
@@ -57,6 +58,7 @@ impl Service {
             Self::Pop3 => 110,
             Self::Pop3s => 995,
             Self::Kerberos => 88,
+            Self::Snmp => 161,
         }
     }
 
@@ -85,13 +87,14 @@ impl Service {
             Self::Pop3 => "pop3",
             Self::Pop3s => "pop3s",
             Self::Kerberos => "kerberos",
+            Self::Snmp => "snmp",
         }
     }
 
     /// Human-readable list of supported scheme tokens for diagnostics.
     #[must_use]
     pub const fn supported_schemes() -> &'static str {
-        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms, pop3, pop3s, kerberos"
+        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms, pop3, pop3s, kerberos, snmp"
     }
 
     #[must_use]
@@ -167,6 +170,7 @@ impl Service {
             "pop3" => Some(Self::Pop3),
             "pop3s" => Some(Self::Pop3s),
             "kerberos" => Some(Self::Kerberos),
+            "snmp" => Some(Self::Snmp),
             _ => None,
         }
     }

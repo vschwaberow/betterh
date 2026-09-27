@@ -465,6 +465,14 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Quarantine**: Any `AuthResult::LockedOut` permanently quarantines the user for the session; emit `ReportEvent::AccountQuarantined`.
 - **Module**: `src/engine/lockout.rs` (`LockoutGuard`), wired through `pool` / `spray`.
 
+#### L. SNMP v1, v2c & v3 USM (Phase 22)
+
+- **Transport**: UDP/161; rate-paced UDP transport engine with packet-loss backoff.
+- **SNMPv1 & v2c**: ASN.1 BER `GetRequest-PDU` (`sysDescr.0`) with community strings (`public`, `private`).
+- **SNMPv3 USM**: Discovery probe (`Report-PDU` engine ID extraction), key localization (RFC 3414), authentication (`usmHMACMD5AuthProtocol`, `usmHMACSHAAuthProtocol`) for authNoPriv; privacy flags (`usmDESPrivProtocol`, `usmAesCfb128Protocol`) accepted on CLI and rejected until wire encrypt/decrypt lands.
+- **Security**: Never log community strings or localized keys; bounded UDP timeouts.
+- **Module**: `src/protocols/snmp/` (feature = `snmp`).
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:

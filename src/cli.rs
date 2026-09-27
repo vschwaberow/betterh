@@ -105,6 +105,18 @@ pub struct ModuleOptions {
     /// Kerberos realm override (default: derived from FQDN host).
     #[arg(long = "realm", value_name = "REALM")]
     pub realm: Option<String>,
+    /// SNMP protocol version (`1`, `2c`, or `3`).
+    #[arg(long = "snmp-version", value_parser = ["1", "2c", "3"], default_value = "2c")]
+    pub snmp_version: String,
+    /// `SNMPv3` authentication protocol (`md5` or `sha`).
+    #[arg(long = "snmp-auth", value_parser = ["md5", "sha"], default_value = "sha")]
+    pub snmp_auth: String,
+    /// `SNMPv3` privacy protocol (`none`, `des`, or `aes`).
+    #[arg(long = "snmp-priv", value_parser = ["none", "des", "aes"], default_value = "none")]
+    pub snmp_priv: String,
+    /// `SNMPv3` privacy passphrase (defaults to the auth password).
+    #[arg(long = "snmp-priv-password", value_name = "PASS")]
+    pub snmp_priv_password: Option<String>,
 
     /// Skip TLS certificate validation.
     #[arg(short = 'k', long)]

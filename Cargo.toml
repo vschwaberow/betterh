@@ -6,7 +6,7 @@ description = "A modern, high-performance, memory-safe network authentication au
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap", "smb", "rdp", "mssql", "winrm", "pop3", "kerberos", "mcp"]
+default = ["ftp", "http", "ssh", "smtp", "mysql", "postgres", "redis", "imap", "ldap", "smb", "rdp", "mssql", "winrm", "pop3", "kerberos", "snmp", "mcp"]
 ftp = []
 http = ["dep:reqwest"]
 ssh = ["dep:russh"]
@@ -26,6 +26,7 @@ mcp = []
 feasibility-smb = ["smb"]
 feasibility-rdp = ["rdp"]
 kerberos = ["dep:kerbcore"]
+snmp = ["dep:md5-hmac", "dep:sha1", "dep:hmac"]
 
 [dependencies]
 # Async Runtime & Concurrency

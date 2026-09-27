@@ -187,6 +187,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 21.2 Dynamic account suspend & wordlist queue deferral         |
 |  - 21.3 Lockout early-warning detection & permanent quarantine    |
 |  - 21.4 CLI flags (--max-failures-per-user), dry-run & tests      |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 22: SNMP v1/v2c & v3 USM Module (UDP 161)               |
+|  - 22.1 ASN.1 BER GetRequest/GetResponse & Report-PDU codec       |
+|  - 22.2 Community-string auth (v1 / v2c)                          |
+|  - 22.3 SNMPv3 USM discovery, auth (MD5/SHA) & priv (DES/AES)     |
+|  - 22.4 CLI snmp://, hermetic mocks, docs                         |
 +-------------------------------------------------------------------+
 ```
 
@@ -1239,6 +1248,50 @@ cargo fmt --check
 
 ---
 
+## Phase 22: SNMP v1, v2c & v3 USM Protocol Module (UDP 161)
+
+**Goal**: Implement native SNMP authentication auditor for network devices and appliances over UDP/161. Support community strings (v1/v2c `public`, `private`, `manager`) and SNMPv3 User-based Security Model (USM) with authentication (MD5, SHA1) and privacy encryption (DES, AES).
+
+**Depends on**: Phase 10 ASN.1 BER primitives; UDP transport pacing engine with loss tolerance.
+
+### Tasks
+- [x] **Task 22.1: SNMP ASN.1 BER Framing & PDU Codec (`src/protocols/snmp/codec.rs`)**
+  - **Description**: Implement ASN.1 BER encoder for `GetRequest-PDU` requesting standard OID `sysDescr.0` (`1.3.6.1.2.1.1.1.0`). Implement decoder for `GetResponse-PDU` and `Report-PDU` with error status (noError, noSuchName, genErr, authorizationError). UDP datagram send/receive with loss detection and retry pacing.
+  - **Acceptance**: Correct encoding and decoding of SNMPv1/v2c/v3 messages against RFC 1157, RFC 1905, RFC 3416 test vectors.
+  - **Files**: `src/protocols/snmp/codec.rs`, `src/protocols/snmp/mod.rs`
+  - **Verify**: Unit tests in `src/protocols/snmp/codec.rs`.
+
+- [x] **Task 22.2: SNMPv1 and SNMPv2c Community String Audit**
+  - **Description**: Implement community string validation for SNMPv1 and SNMPv2c. Valid response with `noError` $\to$ `AuthResult::Success`. Dropped packet after retries or bad community error $\to$ `AuthResult::Failure`.
+  - **Acceptance**: Fast, lightweight auditing of read/write community strings against network devices.
+  - **Files**: `src/protocols/snmp/v1_v2c.rs`
+  - **Verify**: Hermetic mock UDP listener tests for SNMPv1/v2c.
+
+- [x] **Task 22.3: SNMPv3 USM Handshake, Auth (MD5/SHA1) & Priv (DES/AES)**
+  - **Description**: Implement SNMPv3 User-based Security Model (RFC 3414). Discovery probe with empty engine ID to extract authoritative engine ID from `Report-PDU`. Implement key localization (`password_to_key`). Support auth protocols (`usmHMACMD5AuthProtocol`, `usmHMACSHAAuthProtocol`) and priv protocols (`usmDESPrivProtocol`, `usmAesCfb128Protocol`). Map `usmStatsWrongDigests` / `usmStatsUnknownUserNames` $\to$ `AuthResult::Failure`.
+  - **Acceptance**: Complete SNMPv3 USM authentication against simulated SNMPv3 agent.
+  - **Files**: `src/protocols/snmp/v3.rs`, `src/protocols/snmp/usm.rs`
+  - **Verify**: Unit tests with RFC 3414 key localization test vectors and mock v3 agent.
+
+- [x] **Task 22.4: CLI Wiring (`snmp://`), UDP Pacer Tuning & Hermetic Mocks**
+  - **Description**: Register `Service::Snmp`, default port UDP/161, URL scheme `snmp://`. Add UDP packet pacer to prevent packet dropping at switch buffers. Hermetic in-process mock UDP server tests.
+  - **Acceptance**: `betterh snmp 192.168.1.1 -P communities.txt` parses and executes cleanly; hermetic mock tests pass in CI.
+  - **Files**: `src/cli.rs`, `src/engine/modules.rs`, `src/service.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test protocols::snmp`, clippy, fmt.
+
+### Phase 22 Checkpoint
+
+```bash
+cargo test protocols::snmp
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1256,6 +1309,7 @@ cargo fmt --check
 | **MSSQL Auth Module** | Hermetic TDS LOGIN7 mocks | `cargo test protocols::mssql` |
 | **POP3 Auth Module** | Hermetic POP3/POP3S mocks | `cargo test protocols::pop3` |
 | **Lockout Safeguard** | Per-user cool/quarantine | `cargo test engine::lockout` |
+| **SNMP Module** | Hermetic SNMPv1/v2c/v3 UDP mocks | `cargo test protocols::snmp` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
