@@ -1,6 +1,6 @@
 # Betterh
 
-Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, PostgreSQL, Redis, IMAP/IMAPS, LDAP/LDAPS, SMB, and RDP behind optional Cargo features.
+Betterh is a memory-safe, high-concurrency network authentication auditor written in Rust. It streams credentials with constant memory, respects scope exclusions, probes for false positives before a run, and speaks FTP, HTTP/HTTPS, SSH, SMTP/SMTPS, MySQL, PostgreSQL, Redis, IMAP/IMAPS, LDAP/LDAPS, SMB, RDP, and MSSQL behind optional Cargo features.
 
 **Authorized use only.** Use Betterh only on systems you own or are explicitly allowed to test.
 
@@ -32,7 +32,7 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
-Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`.
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`, `mssql`.
 
 ### Examples
 
@@ -62,6 +62,7 @@ betterh imaps 127.0.0.1:993 -u alice -P passwords.txt --insecure
 betterh ldap://127.0.0.1:389 -u 'cn=alice,dc=example,dc=com' -P passwords.txt
 betterh smb://127.0.0.1 -u 'DOMAIN\alice' -P passwords.txt
 betterh rdp://127.0.0.1 -u alice -P passwords.txt --insecure
+betterh mssql://127.0.0.1 -u sa -P passwords.txt --database master --insecure
 
 # Wordlist rules and seasonal mangling
 betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --rule-year 2026
@@ -80,7 +81,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`); MSSQL (TDS `LOGIN7`) |
 | Wordlists | $O(1)$ streaming wordlists; Hashcat rules (`--rules`); mangling (`-e n,s,r,y,c,l,C`); year overrides (`--rule-year`) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
@@ -102,6 +103,7 @@ Production SMB / RDP modules (feasibility features re-export codecs):
 ```bash
 cargo test --features smb protocols::smb
 cargo test --features rdp protocols::rdp
+cargo test --features mssql protocols::mssql
 cargo test --features feasibility-rdp feasibility::rdp
 ```
 

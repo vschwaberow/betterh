@@ -431,10 +431,10 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 #### H. MSSQL TDS Login (Phase 18)
 
 - **Transport**: TCP/1433; TDS PRELOGIN + LOGIN7 SQL authentication.
-- **TLS**: Honour PRELOGIN encrypt-login / full encrypt via `TransportStream` before password material when required.
+- **TLS**: Honour PRELOGIN `ENCRYPT_ON` / `ENCRYPT_REQ` via `TransportStream` before LOGIN7 password material; `ENCRYPT_OFF` / `ENCRYPT_NOT_SUP` may send LOGIN7 in clear.
 - **Out of scope**: Windows Integrated / SSPI / Kerberos / Azure AD; post-login queries.
-- **Security**: No password logging; `--insecure` = cert verify bypass only.
-- **Module**: `src/protocols/mssql.rs` (feature = `mssql`), CLI `mssql://`.
+- **Security**: No password logging; LOGIN7 password field uses TDS obfuscation; `--insecure` = cert verify bypass only; SOCKS5 supported.
+- **Module**: `src/protocols/mssql.rs` (feature = `mssql`, in `default`), CLI `mssql://`, optional `--database`.
 
 #### I. POP3 / POP3S (Phase 19)
 

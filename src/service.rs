@@ -23,6 +23,7 @@ pub enum Service {
     Ldaps,
     Smb,
     Rdp,
+    Mssql,
 }
 
 impl Service {
@@ -45,6 +46,7 @@ impl Service {
             Self::Ldaps => 636,
             Self::Smb => 445,
             Self::Rdp => 3389,
+            Self::Mssql => 1433,
         }
     }
 
@@ -67,13 +69,14 @@ impl Service {
             Self::Ldaps => "ldaps",
             Self::Smb => "smb",
             Self::Rdp => "rdp",
+            Self::Mssql => "mssql",
         }
     }
 
     /// Human-readable list of supported scheme tokens for diagnostics.
     #[must_use]
     pub const fn supported_schemes() -> &'static str {
-        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp"
+        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql"
     }
 
     #[must_use]
@@ -83,7 +86,7 @@ impl Service {
 
     #[must_use]
     pub(crate) const fn is_database(self) -> bool {
-        matches!(self, Self::Mysql | Self::Postgres)
+        matches!(self, Self::Mysql | Self::Postgres | Self::Mssql)
     }
 
     /// Whether the default transport implies TLS without STARTTLS negotiation.
@@ -105,6 +108,7 @@ impl Service {
                 | Self::Ldap
                 | Self::Ldaps
                 | Self::Rdp
+                | Self::Mssql
         )
     }
 
@@ -130,6 +134,7 @@ impl Service {
             "ldaps" => Some(Self::Ldaps),
             "smb" => Some(Self::Smb),
             "rdp" => Some(Self::Rdp),
+            "mssql" => Some(Self::Mssql),
             _ => None,
         }
     }

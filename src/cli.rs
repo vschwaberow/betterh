@@ -298,7 +298,7 @@ impl Cli {
         }
         if module.insecure && !service.allows_insecure() {
             return Err(invalid(
-                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp)",
+                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp, mssql)",
             ));
         }
         if module.ssh_key.is_some() && service != Service::Ssh {
@@ -308,7 +308,9 @@ impl Cli {
             return Err(invalid("--ftp-passive requires an ftp target"));
         }
         if module.database.is_some() && !service.is_database() {
-            return Err(invalid("--database requires a mysql or postgres target"));
+            return Err(invalid(
+                "--database requires a mysql, postgres, or mssql target",
+            ));
         }
         Ok(())
     }
