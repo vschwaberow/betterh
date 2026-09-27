@@ -534,6 +534,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         "pop3",
         "pop3s",
         "kerberos",
+        "snmp",
     ] {
         let mut args = vec![
             service,

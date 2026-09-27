@@ -14,6 +14,7 @@ Update this file in the same pull request as user-visible changes.
 - Phase 14 refactor: canonical `Service` registry (`src/service.rs`), `engine/modules.rs` builders, shared `protocols/io` dial/CRLF helpers; feasibility codecs remain thin re-exports of production SMB/RDP
 
 ### Added
+- SNMP v1/v2c community and SNMPv3 USM ProtocolModule (`snmp://`, UDP/161): GetRequest `sysDescr.0`, discovery Report engine-ID, `--snmp-version` / `--snmp-auth` / `--snmp-priv`, hermetic UDP mocks
 - Intelligent account lockout safeguard (`--max-failures-per-user`, `--lockout-cooldown`): per-user cooling, permanent quarantine on `AuthResult::LockedOut`, `ReportEvent::AccountQuarantined`, dry-run display
 - Kerberos AS-REQ ProtocolModule (`kerberos://`, port 88): PA-ENC-TIMESTAMP (AES-256), KDC error mapping, `--realm`, hermetic mocks
 - POP3/POP3S ProtocolModule (`pop3` / `pop3s`, ports 110/995): USER/PASS, optional AUTH PLAIN, STLS/implicit TLS, SOCKS5, hermetic mocks

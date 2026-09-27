@@ -40,6 +40,7 @@ pub(crate) fn build_module(
         Service::Winrm | Service::Winrms => winrm_module(cli, proxy),
         Service::Pop3 | Service::Pop3s => pop3_module(cli, proxy),
         Service::Kerberos => kerberos_module(cli, proxy),
+        Service::Snmp => snmp_module(cli),
     }
 }
 
@@ -234,4 +235,29 @@ fn kerberos_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolM
             .with_proxy(proxy)
             .with_realm(cli.module.realm.clone())
     )
+}
+
+fn snmp_module(cli: &Cli) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!("snmp", "SNMP", {
+        use crate::protocols::snmp::{SnmpAuthProtocol, SnmpModule, SnmpPrivProtocol, Version};
+        let version = match cli.module.snmp_version.as_str() {
+            "1" => Version::V1,
+            "3" => Version::V3,
+            _ => Version::V2c,
+        };
+        let auth = match cli.module.snmp_auth.as_str() {
+            "md5" => SnmpAuthProtocol::Md5,
+            _ => SnmpAuthProtocol::Sha1,
+        };
+        let priv_protocol = match cli.module.snmp_priv.as_str() {
+            "des" => SnmpPrivProtocol::Des,
+            "aes" => SnmpPrivProtocol::Aes,
+            _ => SnmpPrivProtocol::None,
+        };
+        SnmpModule::new()
+            .with_version(version)
+            .with_auth(auth)
+            .with_priv(priv_protocol)
+            .with_priv_password(cli.module.snmp_priv_password.clone())
+    })
 }

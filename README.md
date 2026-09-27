@@ -84,7 +84,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`); MSSQL (TDS `LOGIN7`) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`); MSSQL (TDS `LOGIN7`); SNMP (v1/v2c community, v3 USM) |
 | Wordlists | $O(1)$ streaming wordlists; Hashcat rules (`--rules`); mangling (`-e n,s,r,y,c,l,C`); year overrides (`--rule-year`) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
