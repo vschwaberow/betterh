@@ -15,7 +15,8 @@
     feature = "smb",
     feature = "rdp",
     feature = "mssql",
-    feature = "winrm"
+    feature = "winrm",
+    feature = "pop3"
 ))]
 pub mod io;
 pub mod mock;
@@ -31,7 +32,8 @@ pub mod mock;
     feature = "smb",
     feature = "rdp",
     feature = "mssql",
-    feature = "winrm"
+    feature = "winrm",
+    feature = "pop3"
 ))]
 pub mod socks;
 pub mod types;
@@ -77,6 +79,9 @@ pub mod mssql;
 
 #[cfg(feature = "winrm")]
 pub mod winrm;
+
+#[cfg(feature = "pop3")]
+pub mod pop3;
 
 use std::time::Duration;
 
@@ -174,3 +179,6 @@ pub use mssql::MssqlModule;
 
 #[cfg(feature = "winrm")]
 pub use winrm::WinrmModule;
+
+#[cfg(feature = "pop3")]
+pub use pop3::Pop3Module;
