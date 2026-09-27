@@ -10,9 +10,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 
-#[cfg(feature = "http")]
-use crate::cli::HttpAuth;
-use crate::cli::{AttackMode, Cli, Service, TargetInput};
+use crate::cli::{AttackMode, Cli, TargetInput};
 use crate::config::Config;
 use crate::engine::canary::{self, CanaryError};
 use crate::engine::scope::{Scope, ScopeError};
@@ -26,6 +24,7 @@ use crate::engine::{
 };
 use crate::protocols::{Credential, ProtocolError, ProtocolModule, Target};
 use crate::report::{ReporterMode, SessionReporter};
+use crate::service::Service;
 
 #[derive(Debug, Error)]
 pub enum RunError {
@@ -322,23 +321,7 @@ fn path_or_stdin(path: PathBuf) -> InputSource {
 }
 
 fn service_name(service: Service) -> &'static str {
-    match service {
-        Service::Ftp => "ftp",
-        Service::Ssh => "ssh",
-        Service::Http => "http",
-        Service::Https => "https",
-        Service::Smtp => "smtp",
-        Service::Smtps => "smtps",
-        Service::Mysql => "mysql",
-        Service::Postgres => "postgres",
-        Service::Redis => "redis",
-        Service::Imap => "imap",
-        Service::Imaps => "imaps",
-        Service::Ldap => "ldap",
-        Service::Ldaps => "ldaps",
-        Service::Smb => "smb",
-        Service::Rdp => "rdp",
-    }
+    service.scheme()
 }
 
 fn session_hash(service: Service, cli: &Cli) -> String {
@@ -351,143 +334,12 @@ fn session_hash(service: Service, cli: &Cli) -> String {
     format!("{:x}", hasher.finish())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "exhaustive Service → ProtocolModule registry with feature-gated arms"
-)]
 fn build_module(
     cli: &Cli,
     config: &Config,
     service: Service,
 ) -> Result<Arc<dyn ProtocolModule>, RunError> {
-    let _ = cli;
-    let proxy = config.proxy.clone();
-    match service {
-        #[cfg(feature = "ftp")]
-        Service::Ftp => Ok(Arc::new(
-            crate::protocols::FtpModule::new(cli.module.ftp_passive).with_proxy(proxy),
-        )),
-        #[cfg(feature = "ssh")]
-        Service::Ssh => Ok(Arc::new(crate::protocols::SshModule::new(
-            cli.module.ssh_key.clone(),
-            proxy,
-        ))),
-        #[cfg(feature = "http")]
-        Service::Http | Service::Https => {
-            let mode = match cli.module.http_auth.unwrap_or(HttpAuth::Basic) {
-                HttpAuth::Basic => crate::protocols::HttpAuthMode::Basic,
-                HttpAuth::PostForm => crate::protocols::HttpAuthMode::PostForm,
-                HttpAuth::Bearer => crate::protocols::HttpAuthMode::Bearer,
-            };
-            let headers = cli
-                .module
-                .headers
-                .iter()
-                .filter_map(|header| header.split_once(':'))
-                .map(|(name, value)| (name.trim().to_owned(), value.trim().to_owned()))
-                .collect();
-            let module = crate::protocols::HttpModule::new(crate::protocols::HttpOptions {
-                mode,
-                body_template: cli.module.body.clone(),
-                success_string: cli.module.success_string.clone(),
-                fail_string: cli.module.fail_string.clone(),
-                headers,
-                method: cli.module.http_method.clone(),
-                cookie: cli.module.cookie.clone(),
-                insecure: cli.module.insecure,
-                proxy,
-            })?;
-            Ok(Arc::new(module))
-        }
-        #[cfg(feature = "smtp")]
-        Service::Smtp | Service::Smtps => Ok(Arc::new(
-            crate::protocols::SmtpModule::new()
-                .with_proxy(proxy)
-                .with_insecure(cli.module.insecure),
-        )),
-        #[cfg(feature = "mysql")]
-        Service::Mysql => Ok(Arc::new(
-            crate::protocols::MysqlModule::new()
-                .with_database(cli.module.database.clone())
-                .with_proxy(proxy),
-        )),
-        #[cfg(feature = "postgres")]
-        Service::Postgres => Ok(Arc::new(
-            crate::protocols::PostgresModule::new()
-                .with_database(cli.module.database.clone())
-                .with_proxy(proxy),
-        )),
-        #[cfg(feature = "redis")]
-        Service::Redis => Ok(Arc::new(
-            crate::protocols::RedisModule::new().with_proxy(proxy),
-        )),
-        #[cfg(feature = "imap")]
-        Service::Imap | Service::Imaps => Ok(Arc::new(
-            crate::protocols::ImapModule::new()
-                .with_proxy(proxy)
-                .with_insecure(cli.module.insecure),
-        )),
-        #[cfg(feature = "ldap")]
-        Service::Ldap | Service::Ldaps => Ok(Arc::new(
-            crate::protocols::LdapModule::new()
-                .with_proxy(proxy)
-                .with_insecure(cli.module.insecure),
-        )),
-        #[cfg(feature = "smb")]
-        Service::Smb => Ok(Arc::new(
-            crate::protocols::SmbModule::new().with_proxy(proxy),
-        )),
-        #[cfg(feature = "rdp")]
-        Service::Rdp => Ok(Arc::new(
-            crate::protocols::RdpModule::new()
-                .with_proxy(proxy)
-                .with_insecure(cli.module.insecure),
-        )),
-        #[cfg(not(feature = "ftp"))]
-        Service::Ftp => Err(RunError::Message(
-            "FTP support was not compiled in (enable feature `ftp`)".into(),
-        )),
-        #[cfg(not(feature = "ssh"))]
-        Service::Ssh => Err(RunError::Message(
-            "SSH support was not compiled in (enable feature `ssh`)".into(),
-        )),
-        #[cfg(not(feature = "http"))]
-        Service::Http | Service::Https => Err(RunError::Message(
-            "HTTP support was not compiled in (enable feature `http`)".into(),
-        )),
-        #[cfg(not(feature = "smtp"))]
-        Service::Smtp | Service::Smtps => Err(RunError::Message(
-            "SMTP support was not compiled in (enable feature `smtp`)".into(),
-        )),
-        #[cfg(not(feature = "mysql"))]
-        Service::Mysql => Err(RunError::Message(
-            "MySQL support was not compiled in (enable feature `mysql`)".into(),
-        )),
-        #[cfg(not(feature = "postgres"))]
-        Service::Postgres => Err(RunError::Message(
-            "PostgreSQL support was not compiled in (enable feature `postgres`)".into(),
-        )),
-        #[cfg(not(feature = "redis"))]
-        Service::Redis => Err(RunError::Message(
-            "Redis support was not compiled in (enable feature `redis`)".into(),
-        )),
-        #[cfg(not(feature = "imap"))]
-        Service::Imap | Service::Imaps => Err(RunError::Message(
-            "IMAP support was not compiled in (enable feature `imap`)".into(),
-        )),
-        #[cfg(not(feature = "ldap"))]
-        Service::Ldap | Service::Ldaps => Err(RunError::Message(
-            "LDAP support was not compiled in (enable feature `ldap`)".into(),
-        )),
-        #[cfg(not(feature = "smb"))]
-        Service::Smb => Err(RunError::Message(
-            "SMB support was not compiled in (enable feature `smb`)".into(),
-        )),
-        #[cfg(not(feature = "rdp"))]
-        Service::Rdp => Err(RunError::Message(
-            "RDP support was not compiled in (enable feature `rdp`)".into(),
-        )),
-    }
+    crate::engine::modules::build_module(cli, config, service)
 }
 
 #[cfg(test)]

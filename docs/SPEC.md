@@ -415,7 +415,7 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
 
 #### E. Post-Expansion Refactoring Track (Phase 14)
 
-After Phases 8–13 grow the protocol surface, Phase 14 consolidates registries (`Service` / `build_module`), shared dial/timeout/line I/O helpers, oversized module splits, and feasibility↔production code sharing. No new `ProtocolModule` methods; structural cleanup only. Spec-first if a shared helper changes a documented contract.
+After Phases 8–13 grow the protocol surface, Phase 14 consolidates registries (`src/service.rs` + `engine/modules.rs`), shared dial/CRLF helpers (`protocols/io.rs`), documented cohesion for large protocol modules, and feasibility↔production re-exports. No new `ProtocolModule` methods; structural cleanup only. Spec-first if a shared helper changes a documented contract.
 
 #### F. Intelligent Wordlist Mutation (Phase 15)
 
@@ -819,7 +819,8 @@ betterh/
 └── src/
     ├── main.rs               # Entrypoint & CLI bootstrap
     ├── lib.rs                # Library root
-    ├── cli.rs                # Clap arguments, URL parsing & hybrid dispatch
+    ├── cli.rs               # Clap arguments, URL parsing & hybrid dispatch
+    ├── service.rs           # Canonical Service / scheme registry (Phase 14)
     ├── config.rs             # Hierarchical config loader (CLI > Env > TOML)
     ├── fsutil.rs             # Owner-only (0600) file create/chmod helpers
     ├── engine/               # Concurrency, worker pool, and attack coordinator
@@ -837,6 +838,7 @@ betterh/
     │   ├── scope.rs          # Target exclusions and RoE guardrails
     │   ├── spray.rs          # Horizontal password spraying coordinator
     │   ├── targets.rs        # Target file and CIDR expansion
+    │   ├── modules.rs        # Feature-gated Service → ProtocolModule builders (Phase 14)
     │   ├── mutations.rs      # Rule mutation engine & seasonal generator (Phase 15)
     │   └── wordlist.rs       # Streaming wordlist generator (O(1) RAM / -)
     ├── feasibility/          # Phase 11 wire prototypes (feature-gated)
@@ -845,6 +847,7 @@ betterh/
 │   └── rdp.rs            # re-exports protocols::rdp (feasibility-rdp)
     ├── protocols/            # ProtocolModule trait and implementations
     │   ├── mod.rs            # ProtocolModule trait and registry
+    │   ├── io.rs             # Shared dial + CRLF line helpers (Phase 14)
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests
     │   ├── ftp.rs            # FTP raw TCP module (feature = "ftp")
     │   ├── http.rs           # HTTP module (feature = "http")

@@ -3,6 +3,9 @@
 
 //! `MySQL` authentication over Tokio TCP with native wire packet framing,
 //! `mysql_native_password`, and `caching_sha2_password`.
+//!
+//! Oversized on purpose: framing, auth plugins, and hermetic mocks share one
+//! dialogue type-state; further splits wait on shared crypto extraction.
 
 use std::time::Duration;
 
@@ -63,13 +66,7 @@ impl MysqlClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<MysqlClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         Ok(MysqlClient {
             stream: Some(stream),
             state: Connected,

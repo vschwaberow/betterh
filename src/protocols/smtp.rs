@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use base64::prelude::*;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpStream,
     time::timeout,
 };
 
@@ -55,13 +54,7 @@ impl SmtpClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<SmtpClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let tcp = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let tcp = super::io::dial(target, proxy).await?;
 
         // Implicit TLS (SMTPS): wrap before reading the banner.
         let (transport, already_tls) = if target.ssl || target.port == 465 {

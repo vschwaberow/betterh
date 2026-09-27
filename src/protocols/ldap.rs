@@ -8,7 +8,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
     time::timeout,
 };
 
@@ -50,13 +49,7 @@ impl LdapClient<Disconnected> {
         proxy: Option<&str>,
         insecure: bool,
     ) -> Result<LdapClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let tcp = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let tcp = super::io::dial(target, proxy).await?;
 
         // Implicit LDAPS: wrap before BindRequest.
         let transport = if target.ssl || target.port == 636 {

@@ -12,4 +12,5 @@ pub mod fsutil;
 pub mod mcp;
 pub mod protocols;
 pub mod report;
+pub mod service;
 pub mod ui;

@@ -36,13 +36,7 @@ impl FtpClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<FtpClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         Ok(FtpClient {
             stream: Some(BufReader::new(stream)),
             _state: PhantomData,

@@ -9,6 +9,10 @@ Update this file in the same pull request as user-visible changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Phase 14 refactor: canonical `Service` registry (`src/service.rs`), `engine/modules.rs` builders, shared `protocols/io` dial/CRLF helpers; feasibility codecs remain thin re-exports of production SMB/RDP
+
 ### Added
 
 - RDP ProtocolModule (`rdp` / `rdp://`, port 3389): TPKT/X.224 Hybrid negotiate → TLS → CredSSP v6 NTLMv2 NLA with `pubKeyAuth` binding and encrypted `TSCredentials`; hermetic mocks; `feasibility-rdp` re-exports production codecs

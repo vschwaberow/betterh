@@ -3,6 +3,9 @@
 
 //! `PostgreSQL` Frontend/Backend Protocol 3.0 authentication with cleartext,
 //! MD5, and `SCRAM-SHA-256` SASL challenges.
+//!
+//! Oversized on purpose: framing, auth plugins, and hermetic mocks share one
+//! dialogue type-state; further splits wait on shared crypto extraction.
 
 use std::time::Duration;
 
@@ -51,13 +54,7 @@ impl PostgresClient<Disconnected> {
         target: &Target,
         proxy: Option<&str>,
     ) -> Result<PostgresClient<Connected>, ProtocolError> {
-        let addr = target.dial_addr();
-        let stream = match proxy {
-            None => TcpStream::connect(&addr)
-                .await
-                .map_err(|error| ProtocolError::ConnectionError(error.to_string()))?,
-            Some(proxy) => super::socks::connect_socks5(proxy, &addr).await?,
-        };
+        let stream = super::io::dial(target, proxy).await?;
         Ok(PostgresClient {
             stream: Some(stream),
             _state: Connected,
