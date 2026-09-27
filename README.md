@@ -89,7 +89,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
 | Network | SOCKS5 / HTTP proxies, pacing, jitter, adaptive backoff |
-| Controls | Canary abort, `--exit-user` / `--exit-host` / `--exit-first`, `--on-found`, checkpoints on interrupt |
+| Controls | Canary abort, `--exit-user` / `--exit-host` / `--exit-first`, `--on-found`, lockout safeguard (`--max-failures-per-user`, `--lockout-cooldown`), checkpoints on interrupt |
 | Output | TTY dashboard, JSON / JSONL (files created mode `0600`) |
 | MCP | `betterh mcp` stdio server: `audit_dryrun`, `audit_execute` (confirm-gated), `validate_scope`, `list_protocols`, `session_status`; resources `betterh://protocols`, `betterh://session/current`, `betterh://reports/{hash}` |
 

@@ -55,7 +55,11 @@ pub enum ReportEvent {
         estimated_ms: u128,
         request_interval_ms: u64,
         reachability: String,
+        max_failures_per_user: u32,
+        lockout_cooldown_ms: u128,
     },
+    /// Username permanently barred after `AuthResult::LockedOut`.
+    AccountQuarantined { username: String, reason: String },
 }
 
 impl ReportEvent {
@@ -78,6 +82,15 @@ impl ReportEvent {
             target: target.to_string(),
             username: cred.username.clone(),
             result,
+        }
+    }
+
+    /// Build an account-quarantined event.
+    #[must_use]
+    pub fn account_quarantined(username: &str, reason: &str) -> Self {
+        Self::AccountQuarantined {
+            username: username.into(),
+            reason: reason.into(),
         }
     }
 }

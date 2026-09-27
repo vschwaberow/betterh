@@ -126,6 +126,17 @@ impl SessionReporter {
         ))
     }
 
+    /// Permanently quarantine a username and emit structured telemetry.
+    ///
+    /// # Errors
+    /// Returns [`JsonlError`] when the JSONL sink fails.
+    pub fn account_quarantined(&mut self, username: &str) -> Result<(), JsonlError> {
+        self.tui.warn(&format!(
+            "Account {username} quarantined after lockout signal; skipping remaining work"
+        ));
+        self.emit(&ReportEvent::account_quarantined(username, "locked_out"))
+    }
+
     /// Pin / emit an operator warning.
     ///
     /// # Errors

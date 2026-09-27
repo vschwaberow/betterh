@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use super::{
     actions::SkipState,
     adaptive::AdaptiveLimiter,
+    lockout::LockoutGuard,
     proxy::Pacer,
     scope::{Scope, ScopeDecision},
 };
@@ -62,6 +63,8 @@ pub struct PoolConfig {
     pub skip: Option<Arc<tokio::sync::Mutex<SkipState>>>,
     pub pacer: Option<Pacer>,
     pub live_findings: Option<mpsc::UnboundedSender<Finding>>,
+    pub lockout: Option<Arc<tokio::sync::Mutex<LockoutGuard>>>,
+    pub quarantine_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl PoolConfig {
@@ -74,6 +77,8 @@ impl PoolConfig {
             skip: None,
             pacer: None,
             live_findings: None,
+            lockout: None,
+            quarantine_tx: None,
         }
     }
 
@@ -92,6 +97,18 @@ impl PoolConfig {
     #[must_use]
     pub fn with_live_findings(mut self, tx: mpsc::UnboundedSender<Finding>) -> Self {
         self.live_findings = Some(tx);
+        self
+    }
+
+    #[must_use]
+    pub fn with_lockout(mut self, lockout: Arc<tokio::sync::Mutex<LockoutGuard>>) -> Self {
+        self.lockout = Some(lockout);
+        self
+    }
+
+    #[must_use]
+    pub fn with_quarantine_tx(mut self, tx: mpsc::UnboundedSender<String>) -> Self {
+        self.quarantine_tx = Some(tx);
         self
     }
 }
@@ -255,6 +272,8 @@ where
                 let skip = config.skip.clone();
                 let pacer = config.pacer;
                 let live = config.live_findings.clone();
+                let lockout = config.lockout.clone();
+                let quarantine_tx = config.quarantine_tx.clone();
                 join_set.spawn(async move {
                     let _permit = permit;
                     if cancel.is_cancelled() {
@@ -263,6 +282,12 @@ where
                     if let Some(skip) = &skip {
                         let guard = skip.lock().await;
                         if guard.should_skip(&attempt.target, &attempt.credential.username) {
+                            return;
+                        }
+                    }
+                    if let Some(lockout) = &lockout {
+                        let mut guard = lockout.lock().await;
+                        if !guard.allow(&attempt.credential.username) {
                             return;
                         }
                     }
@@ -288,6 +313,10 @@ where
                             let mut limiter = limiter.lock().await;
                             limiter.on_outcome_ok();
                             drop(limiter);
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                guard.record_success(&attempt.credential.username);
+                            }
                             if let Some(skip) = &skip {
                                 let mut guard = skip.lock().await;
                                 guard.record_success(
@@ -311,7 +340,29 @@ where
                             let mut limiter = limiter.lock().await;
                             limiter.on_rate_limited(delay);
                         }
-                        Ok(AuthResult::Failure | AuthResult::LockedOut | AuthResult::Error(_)) => {
+                        Ok(AuthResult::Failure) => {
+                            let mut limiter = limiter.lock().await;
+                            limiter.on_outcome_ok();
+                            drop(limiter);
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                guard.record_failure(&attempt.credential.username);
+                            }
+                        }
+                        Ok(AuthResult::LockedOut) => {
+                            let mut limiter = limiter.lock().await;
+                            limiter.on_outcome_ok();
+                            drop(limiter);
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                if guard.quarantine(&attempt.credential.username)
+                                    && let Some(tx) = &quarantine_tx
+                                {
+                                    let _ = tx.send(attempt.credential.username.clone());
+                                }
+                            }
+                        }
+                        Ok(AuthResult::Error(_)) => {
                             let mut limiter = limiter.lock().await;
                             limiter.on_outcome_ok();
                         }
@@ -432,5 +483,107 @@ mod tests {
         cancel.cancel();
         let err = handle.await.unwrap().unwrap_err();
         assert!(matches!(err, PoolError::Cancelled));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lockout_skips_cooled_user_and_quarantines_on_locked_out() {
+        use crate::protocols::CanaryStatus;
+        use async_trait::async_trait;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::time::{Duration, advance};
+
+        struct CountingFailThenLock {
+            calls: AtomicUsize,
+        }
+
+        #[async_trait]
+        impl ProtocolModule for CountingFailThenLock {
+            fn name(&self) -> &'static str {
+                "count-fail"
+            }
+            fn default_port(&self) -> u16 {
+                22
+            }
+            async fn authenticate(
+                &self,
+                _target: &Target,
+                credential: &Credential,
+                _timeout: Duration,
+            ) -> Result<AuthResult, ProtocolError> {
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                if credential.username == "locked" {
+                    return Ok(AuthResult::LockedOut);
+                }
+                if n < 2 {
+                    return Ok(AuthResult::Failure);
+                }
+                Ok(AuthResult::Success)
+            }
+            async fn canary_probe(&self, _target: &Target) -> Result<CanaryStatus, ProtocolError> {
+                Ok(CanaryStatus::Normal)
+            }
+        }
+
+        let module = Arc::new(CountingFailThenLock {
+            calls: AtomicUsize::new(0),
+        });
+        let lockout = Arc::new(tokio::sync::Mutex::new(LockoutGuard::new(
+            2,
+            Duration::from_secs(10),
+        )));
+        let (q_tx, mut q_rx) = mpsc::unbounded_channel();
+        let cancel = CancellationToken::new();
+        let attempts = vec![
+            Attempt {
+                target: target("127.0.0.1"),
+                credential: Credential {
+                    username: "alice".into(),
+                    password: Some("1".into()),
+                },
+            },
+            Attempt {
+                target: target("127.0.0.1"),
+                credential: Credential {
+                    username: "alice".into(),
+                    password: Some("2".into()),
+                },
+            },
+            Attempt {
+                target: target("127.0.0.1"),
+                credential: Credential {
+                    username: "alice".into(),
+                    password: Some("3".into()),
+                },
+            },
+            Attempt {
+                target: target("127.0.0.1"),
+                credential: Credential {
+                    username: "locked".into(),
+                    password: Some("x".into()),
+                },
+            },
+            Attempt {
+                target: target("127.0.0.1"),
+                credential: Credential {
+                    username: "locked".into(),
+                    password: Some("y".into()),
+                },
+            },
+        ];
+        let findings = run_brute(
+            module,
+            attempts,
+            PoolConfig::new(1, Duration::from_secs(2), cancel)
+                .with_lockout(Arc::clone(&lockout))
+                .with_quarantine_tx(q_tx),
+        )
+        .await
+        .unwrap();
+        assert!(findings.is_empty());
+        assert_eq!(q_rx.recv().await.as_deref(), Some("locked"));
+        assert!(lockout.lock().await.is_quarantined("locked"));
+        assert!(!lockout.lock().await.allow("alice"));
+        advance(Duration::from_secs(10)).await;
+        assert!(lockout.lock().await.allow("alice"));
     }
 }

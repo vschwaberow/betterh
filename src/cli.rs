@@ -165,6 +165,12 @@ pub struct Cli {
     pub mode: AttackMode,
     #[arg(long, value_parser = parse_duration, default_value = "15m")]
     pub spray_cooldown: Duration,
+    /// Max consecutive failures per user before cooling (0 disables threshold cooling).
+    #[arg(long, default_value_t = 0)]
+    pub max_failures_per_user: u32,
+    /// Cooldown after hitting `--max-failures-per-user`.
+    #[arg(long, value_parser = parse_duration, default_value = "15m")]
+    pub lockout_cooldown: Duration,
     #[arg(long, action = clap::ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true", default_value = "true")]
     pub exit_user: bool,
     #[arg(long)]
@@ -666,6 +672,8 @@ mod tests {
         .unwrap();
         assert_eq!(cli.mode, AttackMode::Spray);
         assert_eq!(cli.spray_cooldown, Duration::from_mins(15));
+        assert_eq!(cli.max_failures_per_user, 0);
+        assert_eq!(cli.lockout_cooldown, Duration::from_mins(15));
         assert_eq!(cli.delay, Duration::from_millis(200));
         assert_eq!(cli.jitter, Duration::from_millis(50));
         assert!(!cli.exit_user);
