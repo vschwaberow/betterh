@@ -1094,13 +1094,13 @@ cargo fmt --check
 **Depends on**: Phase 9 `TransportStream`; Phase 14.2 line I/O helpers if landed (otherwise local CRLF reader, then dedupe in 14.2).
 
 ### Tasks
-- [ ] **Task 19.1: POP3 Dialogue (`USER` / `PASS`, Optional `AUTH PLAIN`)**
+- [x] **Task 19.1: POP3 Dialogue (`USER` / `PASS`, Optional `AUTH PLAIN`)**
   - **Description**: Implement `Pop3Module` (feature = `pop3`). Parse `+OK`/`-ERR` greeting; `USER`/`PASS`; if `CAPA` lists SASL `PLAIN`, allow `AUTH PLAIN` as alternate path (default: USER/PASS first — document).
   - **Acceptance**: Hermetic mock success/failure; unknown capa ignored safely.
   - **Files**: `src/protocols/pop3.rs`, `src/protocols/mod.rs`, `Cargo.toml`
   - **Verify**: Mock tests in `src/protocols/pop3.rs`.
 
-- [ ] **Task 19.2: STARTTLS (110) & Implicit POP3S (995)**
+- [x] **Task 19.2: STARTTLS (110) & Implicit POP3S (995)**
   - **Description**: On port 110, if `STLS` in capa (or policy always-try), issue `STLS`, upgrade via `TransportStream`, then auth. On 995/`pop3s`/`ssl`, wrap TLS before greeting as required (document order). Honour `--insecure`.
   - **Acceptance**: Plain, STARTTLS, and POP3S mocks pass; do not send plaintext PASS when TLS was required and STLS failed.
   - **Files**: `src/protocols/pop3.rs`, `src/protocols/tls.rs`
@@ -1129,7 +1129,6 @@ cargo fmt --check
 
 ---
 
->>>>>>> origin/master
 ## Verification Matrix
 
 | Area | Check | Command |

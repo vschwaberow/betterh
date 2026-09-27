@@ -439,7 +439,8 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 #### I. POP3 / POP3S (Phase 19)
 
 - **Transport**: TCP/110 (+ `STLS`), TCP/995 implicit TLS (`pop3s`).
-- **Auth**: `USER`/`PASS`; optional `AUTH PLAIN` when `CAPA` advertises it; always `QUIT`.
+- **Auth**: Default `USER`/`PASS`; optional `AUTH PLAIN` when `CAPA` advertises `SASL PLAIN` and prefer-auth-plain is set; always `QUIT`.
+- **TLS**: Implicit TLS before greeting on port 995 / `ssl`; on 110, `CAPA`→`STLS` when advertised then upgrade via `TransportStream` before `PASS`. `--insecure` = cert verify bypass only; never plaintext `PASS` after failed `STLS`.
 - **Security**: Prefer STARTTLS before `PASS` when required; `--insecure` for cert bypass; no credential logging; SOCKS5.
 - **Module**: `src/protocols/pop3.rs` (feature = `pop3`).
 
