@@ -36,6 +36,7 @@ pub(crate) fn build_module(
         Service::Ldap | Service::Ldaps => ldap_module(cli, proxy),
         Service::Smb => smb_module(proxy),
         Service::Rdp => rdp_module(cli, proxy),
+        Service::Mssql => mssql_module(cli, proxy),
     }
 }
 
@@ -183,5 +184,16 @@ fn rdp_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule
         crate::protocols::RdpModule::new()
             .with_proxy(proxy)
             .with_insecure(cli.module.insecure)
+    )
+}
+
+fn mssql_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!(
+        "mssql",
+        "MSSQL",
+        crate::protocols::MssqlModule::new()
+            .with_proxy(proxy)
+            .with_insecure(cli.module.insecure)
+            .with_database(cli.module.database.clone())
     )
 }

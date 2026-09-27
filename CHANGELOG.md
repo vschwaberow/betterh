@@ -15,6 +15,7 @@ Update this file in the same pull request as user-visible changes.
 
 ### Added
 
+- MSSQL TDS ProtocolModule (`mssql` / `mssql://`, port 1433): PRELOGIN + LOGIN7 SQL auth with encrypt-login/full TLS, hermetic mocks
 - RDP ProtocolModule (`rdp` / `rdp://`, port 3389): TPKT/X.224 Hybrid negotiate → TLS → CredSSP v6 NTLMv2 NLA with `pubKeyAuth` binding and encrypted `TSCredentials`; hermetic mocks; `feasibility-rdp` re-exports production codecs
 - SMB ProtocolModule (`smb` / `smb://`, port 445): SMBv2 `NEGOTIATE` → `SESSION_SETUP` with NTLMSSP NTLMv2, optional SPNEGO wrap, SOCKS5, hermetic mocks; feasibility-smb re-exports production codecs
 - Intelligent wordlist & mutation engine (`--rules <file>`, `-e y,c,l,C`, `--rule-year <YEAR>`) with Hashcat rule interpreter, seasonal/enterprise generators, and $O(1)$ memory streaming pipeline (< 30 MB RSS across 1M candidates)

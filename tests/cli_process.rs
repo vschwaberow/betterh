@@ -502,6 +502,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         "ldaps",
         "smb",
         "rdp",
+        "mssql",
     ] {
         let mut args = vec![
             service,
@@ -514,7 +515,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
             "--format",
             "jsonl",
         ];
-        if service == "mysql" || service == "postgres" {
+        if service == "mysql" || service == "postgres" || service == "mssql" {
             args.extend(["--database", "appdb"]);
         }
         let result = run(&args, &[]);
@@ -548,7 +549,7 @@ fn database_flag_rejected_on_non_database_services() {
         assert!(!result.status.success());
         let stderr = String::from_utf8_lossy(&result.stderr);
         assert!(
-            stderr.contains("--database requires a mysql or postgres target"),
+            stderr.contains("--database requires a mysql, postgres, or mssql target"),
             "unexpected error for {service}: {stderr}"
         );
     }

@@ -1044,31 +1044,37 @@ cargo fmt --check
 **Depends on**: Phase 9 TLS helper; optional registry cleanup from Phase 14.1.
 
 ### Tasks
-- [ ] **Task 18.1: TDS PRELOGIN & Packet Framing**
+- [x] **Task 18.1: TDS PRELOGIN & Packet Framing**
   - **Description**: Implement `MssqlModule` (feature = `mssql`) with TDS packet header (type, status, length, SPID, packet ID), PRELOGIN option tokens (VERSION, ENCRYPTION, INSTOPT, THREADID, MARS). Default port 1433.
   - **Acceptance**: Hermetic mock PRELOGIN round-trip; clear errors on truncated/invalid packets.
   - **Files**: `src/protocols/mssql.rs`, `src/protocols/mod.rs`, `Cargo.toml`
   - **Verify**: Framing unit tests in `src/protocols/mssql.rs`.
 
-- [ ] **Task 18.2: LOGIN7 SQL Auth + TLS Encrypt Modes**
+- [x] **Task 18.2: LOGIN7 SQL Auth + TLS Encrypt Modes**
   - **Description**: Build LOGIN7 for username/password SQL auth. Honour PRELOGIN encryption: encrypt-login and full encrypt via `TransportStream`. Reject sending plaintext LOGIN7 when server demands encryption. Windows/SSPI/Integrated auth and Azure AD out of scope (document in SPEC).
   - **Acceptance**: Mock success/failure login; encrypt-required path never sends password in clear; optional `--database` if aligned with MySQL/Postgres CLI.
   - **Files**: `src/protocols/mssql.rs`, `src/protocols/tls.rs`
   - **Verify**: Hermetic mock tests for encrypt-login and failure tokens.
 
-- [ ] **Task 18.3: Token/Error Mapping, SOCKS5, Timeouts**
+- [x] **Task 18.3: Token/Error Mapping, SOCKS5, Timeouts**
   - **Description**: Map LOGINACK → Success; error tokens (e.g. 18456 login failed) → Failure; lockout-like messages → LockedOut when identifiable; resource limits → RateLimited. SOCKS5 dial; bounded timeouts; no unwrap in paths.
   - **Acceptance**: Mapped results covered by mocks; proxy path compiles like other DB modules.
   - **Files**: `src/protocols/mssql.rs`
   - **Verify**: Mock error-token tests.
 
-- [ ] **Task 18.4: CLI Wiring (`mssql://`), Docs**
+- [x] **Task 18.4: CLI Wiring (`mssql://`), Docs**
   - **Description**: `Service::Mssql`, scheme `mssql://`, port 1433, runner, CLI tests, README/CHANGELOG/SPEC tree.
   - **Acceptance**: Dry-run works; `cargo test protocols::mssql` green.
   - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
   - **Verify**: clippy `-D warnings`, fmt.
 
 ### Phase 18 Checkpoint
+
+Completed (2026-09-27) on `feat/phase-18-mssql`: Tasks 18.1–18.4 implement `MssqlModule`
+(TDS PRELOGIN framing, LOGIN7 SQL auth, ENCRYPT_REQ/ON TLS via `TransportStream`,
+error/LOGINACK mapping, SOCKS5, `--database` / `--insecure`, hermetic plain + TLS mocks).
+Windows Integrated / SSPI / Kerberos / Azure AD remain out of scope. Feature `mssql` is in
+Cargo `default`.
 
 ```bash
 cargo test protocols::mssql
