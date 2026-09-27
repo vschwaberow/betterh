@@ -39,6 +39,7 @@ pub(crate) fn build_module(
         Service::Mssql => mssql_module(cli, proxy),
         Service::Winrm | Service::Winrms => winrm_module(cli, proxy),
         Service::Pop3 | Service::Pop3s => pop3_module(cli, proxy),
+        Service::Kerberos => kerberos_module(cli, proxy),
     }
 }
 
@@ -222,5 +223,15 @@ fn pop3_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModul
         crate::protocols::Pop3Module::new()
             .with_proxy(proxy)
             .with_insecure(cli.module.insecure)
+    )
+}
+
+fn kerberos_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!(
+        "kerberos",
+        "Kerberos",
+        crate::protocols::KerberosModule::new()
+            .with_proxy(proxy)
+            .with_realm(cli.module.realm.clone())
     )
 }

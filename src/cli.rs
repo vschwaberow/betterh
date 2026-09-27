@@ -102,6 +102,10 @@ pub struct ModuleOptions {
     /// Database name (`MySQL`, `PostgreSQL`).
     #[arg(long)]
     pub database: Option<String>,
+    /// Kerberos realm override (default: derived from FQDN host).
+    #[arg(long = "realm", value_name = "REALM")]
+    pub realm: Option<String>,
+
     /// Skip TLS certificate validation.
     #[arg(short = 'k', long)]
     pub insecure: bool,

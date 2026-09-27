@@ -444,6 +444,19 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Security**: Prefer STARTTLS before `PASS` when required; `--insecure` for cert bypass; no credential logging; SOCKS5.
 - **Module**: `src/protocols/pop3.rs` (feature = `pop3`, in `default`), CLI `pop3://` / `pop3s://`; SOCKS5 via `--proxy`.
 
+#### J. Kerberos Pre-Authentication (Phase 20)
+
+- **Transport**: TCP/88 (4-byte length prefix) and UDP/88 (raw datagrams); Kerberos v5 (RFC 4120).
+- **Auth**: `AS-REQ` with `PA-ENC-TIMESTAMP` encrypted with derived user key (AES256-CTS-HMAC-SHA1-96, AES128-CTS-HMAC-SHA1-96, or RC4-HMAC).
+- **Error Mapping**:
+  - `AS-REP` (msg 11) $\to$ `AuthResult::Success`
+  - `KDC_ERR_PREAUTH_FAILED` (24) $\to$ `AuthResult::Failure`
+  - `KDC_ERR_C_PRINCIPAL_UNKNOWN` (6) $\to$ `AuthResult::Failure` (records valid user enumeration indicator)
+  - `KDC_ERR_CLIENT_REVOKED` (18) $\to$ `AuthResult::LockedOut`
+  - `KDC_ERR_SVC_UNAVAILABLE` (29) $\to$ `AuthResult::RateLimited`
+- **Security**: Offload crypto key derivation to `spawn_blocking`; never log timestamps or ciphertexts; support `--realm <REALM>` override (auto-derived from target FQDN if omitted).
+- **Module**: `src/protocols/kerberos/` (feature = `kerberos`, in `default`), CLI `kerberos://`, `--realm`; TCP/88 length-prefixed AS exchange via `kerbcore`.
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:

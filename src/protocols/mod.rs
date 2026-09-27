@@ -16,7 +16,8 @@
     feature = "rdp",
     feature = "mssql",
     feature = "winrm",
-    feature = "pop3"
+    feature = "pop3",
+    feature = "kerberos"
 ))]
 pub mod io;
 pub mod mock;
@@ -33,7 +34,8 @@ pub mod mock;
     feature = "rdp",
     feature = "mssql",
     feature = "winrm",
-    feature = "pop3"
+    feature = "pop3",
+    feature = "kerberos"
 ))]
 pub mod socks;
 pub mod types;
@@ -82,6 +84,9 @@ pub mod winrm;
 
 #[cfg(feature = "pop3")]
 pub mod pop3;
+
+#[cfg(feature = "kerberos")]
+pub mod kerberos;
 
 use std::time::Duration;
 
@@ -182,3 +187,6 @@ pub use winrm::WinrmModule;
 
 #[cfg(feature = "pop3")]
 pub use pop3::Pop3Module;
+
+#[cfg(feature = "kerberos")]
+pub use kerberos::KerberosModule;

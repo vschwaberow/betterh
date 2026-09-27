@@ -28,6 +28,7 @@ pub enum Service {
     Winrms,
     Pop3,
     Pop3s,
+    Kerberos,
 }
 
 impl Service {
@@ -55,6 +56,7 @@ impl Service {
             Self::Winrms => 5986,
             Self::Pop3 => 110,
             Self::Pop3s => 995,
+            Self::Kerberos => 88,
         }
     }
 
@@ -82,13 +84,14 @@ impl Service {
             Self::Winrms => "winrms",
             Self::Pop3 => "pop3",
             Self::Pop3s => "pop3s",
+            Self::Kerberos => "kerberos",
         }
     }
 
     /// Human-readable list of supported scheme tokens for diagnostics.
     #[must_use]
     pub const fn supported_schemes() -> &'static str {
-        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms, pop3, pop3s"
+        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms, pop3, pop3s, kerberos"
     }
 
     #[must_use]
@@ -163,6 +166,7 @@ impl Service {
             "winrms" => Some(Self::Winrms),
             "pop3" => Some(Self::Pop3),
             "pop3s" => Some(Self::Pop3s),
+            "kerberos" => Some(Self::Kerberos),
             _ => None,
         }
     }

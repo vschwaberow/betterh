@@ -32,7 +32,7 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
-Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`, `mssql`, `winrm`, `winrms`, `pop3`, `pop3s`.
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`, `mssql`, `winrm`, `winrms`, `pop3`, `pop3s`, `kerberos`.
 
 ### Examples
 
@@ -65,6 +65,7 @@ betterh rdp://127.0.0.1 -u alice -P passwords.txt --insecure
 betterh mssql://127.0.0.1 -u sa -P passwords.txt --database master --insecure
 betterh winrms://127.0.0.1 -u alice -P passwords.txt --insecure
 betterh pop3s://127.0.0.1 -u alice -P passwords.txt --insecure
+betterh kerberos://dc.corp.local -u alice -P passwords.txt --realm CORP.LOCAL
 
 # Wordlist rules and seasonal mangling
 betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --rule-year 2026
@@ -108,6 +109,7 @@ cargo test --features rdp protocols::rdp
 cargo test --features mssql protocols::mssql
 cargo test --features winrm protocols::winrm
 cargo test --features pop3 protocols::pop3
+cargo test --features kerberos protocols::kerberos
 cargo test --features feasibility-rdp feasibility::rdp
 ```
 

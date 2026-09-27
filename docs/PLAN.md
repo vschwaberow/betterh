@@ -169,6 +169,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 19.2 STARTTLS (110) & implicit POP3S (995)                     |
 |  - 19.3 Result mapping, SOCKS5, clean QUIT                        |
 |  - 19.4 CLI pop3/pop3s, hermetic mocks, docs                      |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|     Phase 20: Kerberos Pre-Authentication (AS-REQ / AS-REP)       |
+|  - 20.1 ASN.1 DER framing & AS-REQ / AS-REP codec                 |
+|  - 20.2 PA-ENC-TIMESTAMP & AES/RC4 string-to-key derivations      |
+|  - 20.3 Error code mapping & user enumeration detection           |
+|  - 20.4 CLI kerberos://, realm detection & hermetic tests         |
 +-------------------------------------------------------------------+
 ```
 
@@ -1128,6 +1137,52 @@ cargo test --all-targets --all-features --locked
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt --check
 ```
+
+---
+
+## Phase 20: Active Directory Kerberos Pre-Authentication (AS-REQ / AS-REP)
+
+**Goal**: Implement native Kerberos v5 (RFC 4120) `AS-REQ` pre-authentication probe over TCP and UDP port 88. Validate user existence and passwords against Active Directory Domain Controllers with minimal network overhead (single round-trip) and precise error taxonomy (`KDC_ERR_PREAUTH_FAILED`, `KDC_ERR_C_PRINCIPAL_UNKNOWN`, `KDC_ERR_CLIENT_REVOKED`).
+
+**Depends on**: Phase 10 LDAP / ASN.1 BER primitives; cryptographic primitives (`aes`, `hmac`, `pbkdf2`, `md4`/RC4-HMAC).
+
+### Tasks
+- [x] **Task 20.1: Kerberos ASN.1 DER Codec & Message Framing (`src/protocols/kerberos/codec.rs`)**
+  - **Description**: Implement ASN.1 DER encoder for `AS-REQ` (KDC-REQ-BODY with `cname`, `realm`, `sname` (`krbtgt/REALM`), `till`, `rtime`, `nonce`, and supported `etype` list). Implement decoder for `AS-REP` (message type 11) and `KRB-ERROR` (message type 30). Support 4-byte big-endian framing for TCP/88 and raw datagrams for UDP/88.
+  - **Acceptance**: Correct serialization of RFC 4120 test vectors; robust parsing of KDC replies without panics on malformed packets.
+  - **Files**: `src/protocols/kerberos/codec.rs`, `src/protocols/kerberos/mod.rs`
+  - **Verify**: Unit tests in `src/protocols/kerberos/codec.rs`.
+
+- [x] **Task 20.2: Pre-Authentication (`PA-ENC-TIMESTAMP`) & String-to-Key Crypto (`src/protocols/kerberos/crypto.rs`)**
+  - **Description**: Build `PA-DATA` `PA-ENC-TIMESTAMP` (padata-type 2). Implement string-to-key derivations (`KerberosVersion5` salt `REALMusername` for AES-256 and AES-128 via PBKDF2-HMAC-SHA1; UTF-16LE MD4 for RC4-HMAC). Encrypt current UTC timestamp (`KerberosTime` + microsecond) using AES256-CTS-HMAC-SHA1-96, AES128-CTS-HMAC-SHA1-96, or RC4-HMAC. Offload crypto to `tokio::task::spawn_blocking`.
+  - **Acceptance**: Matching test ciphertexts and hashes from RFC 3961 / RFC 3962 test vectors.
+  - **Files**: `src/protocols/kerberos/crypto.rs`
+  - **Verify**: Unit tests with RFC test vectors in `src/protocols/kerberos/crypto.rs`.
+
+- [x] **Task 20.3: Error Code Mapping & User Enumeration Support**
+  - **Description**: Map `AS-REP` (msg-type 11) $\to$ `AuthResult::Success`. Map `KDC_ERR_PREAUTH_FAILED` (code 24) $\to$ `AuthResult::Failure`. Map `KDC_ERR_C_PRINCIPAL_UNKNOWN` (code 6) $\to$ `AuthResult::Failure` (and flag user existence for enumeration reporting). Map `KDC_ERR_CLIENT_REVOKED` (code 18) $\to$ `AuthResult::LockedOut`. Map `KDC_ERR_SVC_UNAVAILABLE` (code 29) $\to$ `AuthResult::RateLimited`.
+  - **Acceptance**: All RFC 4120 KDC error responses mapped faithfully to domain `AuthResult` variants.
+  - **Files**: `src/protocols/kerberos/mod.rs`
+  - **Verify**: Mock KDC error response mapping tests.
+
+- [x] **Task 20.4: CLI Wiring (`kerberos://`), Realm Detection & Hermetic Tests**
+  - **Description**: Register `Service::Kerberos`, default port 88, URL scheme `kerberos://`. Add `--realm <REALM>` CLI flag (auto-derived from target FQDN if omitted). Build hermetic in-process mock KDC server on `127.0.0.1:0`. Update README, CHANGELOG, and SPEC.
+  - **Acceptance**: `betterh kerberos dc.corp.local -u user -P pass --realm CORP.LOCAL` executes and dry-runs cleanly; hermetic mock tests pass in CI.
+  - **Files**: `src/cli.rs`, `src/engine/modules.rs`, `src/service.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test protocols::kerberos`, clippy, fmt.
+
+### Phase 20 Checkpoint
+
+Completed (2026-09-27) on `feat/phase-20-kerberos`: Tasks 20.1–20.4 add `KerberosModule` (AS-REQ/PA-ENC-TIMESTAMP via `kerbcore`), KDC error mapping, CLI `kerberos://` + `--realm`, hermetic mocks.
+
+```bash
+cargo test protocols::kerberos
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
 
 ---
 
