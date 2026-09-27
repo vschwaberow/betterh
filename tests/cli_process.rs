@@ -507,6 +507,7 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         "winrms",
         "pop3",
         "pop3s",
+        "kerberos",
     ] {
         let mut args = vec![
             service,
@@ -521,6 +522,9 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         ];
         if service == "mysql" || service == "postgres" || service == "mssql" {
             args.extend(["--database", "appdb"]);
+        }
+        if service == "kerberos" {
+            args.extend(["--realm", "CORP.LOCAL"]);
         }
         let result = run(&args, &[]);
         assert!(
