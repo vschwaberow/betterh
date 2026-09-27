@@ -35,6 +35,7 @@ pub enum Service {
     Ldap,
     Ldaps,
     Smb,
+    Rdp,
 }
 
 impl Service {
@@ -55,6 +56,7 @@ impl Service {
             Self::Ldap => 389,
             Self::Ldaps => 636,
             Self::Smb => 445,
+            Self::Rdp => 3389,
         }
     }
 
@@ -80,6 +82,7 @@ impl Service {
                 | Self::Imaps
                 | Self::Ldap
                 | Self::Ldaps
+                | Self::Rdp
         )
     }
 }
@@ -361,7 +364,7 @@ impl Cli {
         }
         if module.insecure && !service.allows_insecure() {
             return Err(invalid(
-                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps)",
+                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp)",
             ));
         }
         if module.ssh_key.is_some() && service != Service::Ssh {
@@ -409,8 +412,9 @@ fn parse_service(value: &str) -> Result<Service, clap::Error> {
         "ldap" => Ok(Service::Ldap),
         "ldaps" => Ok(Service::Ldaps),
         "smb" => Ok(Service::Smb),
+        "rdp" => Ok(Service::Rdp),
         _ => Err(invalid(
-            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb",
+            "Supported services: ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp",
         )),
     }
 }
@@ -489,6 +493,7 @@ pub(crate) fn parse_positional(service: Service, value: &str) -> Result<TargetSo
         Service::Ldap => "ldap",
         Service::Ldaps => "ldaps",
         Service::Smb => "smb",
+        Service::Rdp => "rdp",
     };
     Ok(parse_url(&format!("{scheme}://{host}"))?.source)
 }

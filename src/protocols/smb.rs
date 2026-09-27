@@ -312,6 +312,15 @@ pub fn ntlmv2_nt_proof(
     hmac_md5(&ntowfv2(password, user, domain), &data)
 }
 
+/// `NTLMv2` `SessionBaseKey` / exported session key (no key exchange).
+#[must_use]
+pub fn ntlmv2_session_base_key(response_key_nt: &[u8; 16], nt_proof: &[u8; 16]) -> [u8; 16] {
+    hmac_md5(response_key_nt, nt_proof)
+}
+
+/// Negotiate Extended Session Security (required for `CredSSP` NTLM seal).
+pub const NTLM_NEGOTIATE_EXTENDED_SESSIONSECURITY: u32 = 0x0008_0000;
+
 #[must_use]
 pub fn encode_ntlm_type1(flags: u32) -> Vec<u8> {
     let mut msg = Vec::with_capacity(32);

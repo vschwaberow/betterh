@@ -13,7 +13,8 @@ pub mod mock;
     feature = "redis",
     feature = "imap",
     feature = "ldap",
-    feature = "smb"
+    feature = "smb",
+    feature = "rdp"
 ))]
 pub mod socks;
 pub mod types;
@@ -50,6 +51,9 @@ pub mod ldap;
 
 #[cfg(feature = "smb")]
 pub mod smb;
+
+#[cfg(feature = "rdp")]
+pub mod rdp;
 
 use std::time::Duration;
 
@@ -138,3 +142,6 @@ pub use ldap::LdapModule;
 
 #[cfg(feature = "smb")]
 pub use smb::SmbModule;
+
+#[cfg(feature = "rdp")]
+pub use rdp::RdpModule;
