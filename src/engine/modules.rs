@@ -37,6 +37,7 @@ pub(crate) fn build_module(
         Service::Smb => smb_module(proxy),
         Service::Rdp => rdp_module(cli, proxy),
         Service::Mssql => mssql_module(cli, proxy),
+        Service::Winrm | Service::Winrms => winrm_module(cli, proxy),
     }
 }
 
@@ -196,4 +197,19 @@ fn mssql_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModu
             .with_insecure(cli.module.insecure)
             .with_database(cli.module.database.clone())
     )
+}
+
+fn winrm_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    #[cfg(feature = "winrm")]
+    {
+        let module = crate::protocols::WinrmModule::new(cli.module.insecure, proxy)?;
+        Ok(Arc::new(module))
+    }
+    #[cfg(not(feature = "winrm"))]
+    {
+        let _ = (cli, proxy);
+        Err(RunError::Message(
+            "WinRM support was not compiled in (enable feature `winrm`)".into(),
+        ))
+    }
 }

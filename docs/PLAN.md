@@ -1002,31 +1002,33 @@ cargo fmt --check
 **Depends on**: Shared NTLMv2 helpers (Phase 13/14); `http` + `tls` features.
 
 ### Tasks
-- [ ] **Task 17.1: WinRM HTTP(S) Framing & Auth Probe**
+- [x] **Task 17.1: WinRM HTTP(S) Framing & Auth Probe**
   - **Description**: Implement `WinrmModule` (feature = `winrm`) targeting typical endpoints (e.g. `/wsman`). Probe with an unauthenticated request; detect `WWW-Authenticate: Negotiate` / `NTLM`. Ports: 5985 (HTTP), 5986 (HTTPS).
   - **Acceptance**: Hermetic mock returns 401 with Negotiate; module selects Negotiate path; missing Negotiate → clear `ProtocolError` (no silent Basic).
   - **Files**: `src/protocols/winrm.rs`, `src/protocols/mod.rs`, `Cargo.toml`
   - **Verify**: Mock HTTP server tests for probe behaviour.
 
-- [ ] **Task 17.2: HTTP Negotiate / NTLM Type 1–3 Exchange**
+- [x] **Task 17.2: HTTP Negotiate / NTLM Type 1–3 Exchange**
   - **Description**: Implement multi-leg HTTP auth: send Type 1, parse Type 2 from `WWW-Authenticate`, send Type 3 with NTLMv2 via shared helpers (`spawn_blocking`). Map HTTP success vs auth failure (and WinRM SOAP faults that mean auth failure) to `AuthResult`.
   - **Acceptance**: Success and failure credentials against mock; NTLM tokens never written to logs at info/debug without redaction.
   - **Files**: `src/protocols/winrm.rs`, shared NTLM helpers
   - **Verify**: Hermetic multi-request mock tests.
 
-- [ ] **Task 17.3: TLS, `--insecure`, SOCKS5 & Basic Policy**
+- [x] **Task 17.3: TLS, `--insecure`, SOCKS5 & Basic Policy**
   - **Description**: Wire HTTPS via rustls/`TransportStream` or reqwest rustls path consistently with other modules. SOCKS5 support. Policy: do not fall back to Basic unless an explicit future opt-in flag is added (default off — document in SPEC).
   - **Acceptance**: `winrms` + `--insecure` works in mock TLS; Basic fallback absent by default; timeouts enforced.
   - **Files**: `src/protocols/winrm.rs`, `docs/SPEC.md`
   - **Verify**: TLS and proxy unit/mock coverage aligned with HTTP module patterns.
 
-- [ ] **Task 17.4: CLI Wiring (`winrm` / `winrms`), Mocks, Docs**
+- [x] **Task 17.4: CLI Wiring (`winrm` / `winrms`), Mocks, Docs**
   - **Description**: `Service::Winrm` / `Winrms`, schemes `winrm://` / `winrms://`, runner registry, CLI tests, README/CHANGELOG.
   - **Acceptance**: Dry-run and validation green; feature-gated build works `--features winrm`.
   - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
   - **Verify**: `cargo test protocols::winrm`, clippy, fmt.
 
 ### Phase 17 Checkpoint
+
+Completed (2026-09-27) on `feat/phase-17-winrm`: Tasks 17.1–17.4 add `WinrmModule` (Negotiate/NTLMv2 over HTTP(S) `/wsman`), `Service::Winrm`/`Winrms`, hermetic wiremock tests, no Basic fallback.
 
 ```bash
 cargo test protocols::winrm

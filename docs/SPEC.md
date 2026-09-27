@@ -426,7 +426,7 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Transport**: HTTP TCP/5985 (`winrm`), HTTPS TCP/5986 (`winrms`); typical path `/wsman`.
 - **Auth**: `WWW-Authenticate: Negotiate` / NTLM multi-leg using shared NTLMv2. **No** silent Basic fallback.
 - **Security**: Never log `Authorization` or raw NTLM tokens; HTTPS verify unless `--insecure`; SOCKS5; auth-only (no command invocation).
-- **Module**: `src/protocols/winrm.rs` (feature = `winrm`).
+- **Module**: `src/protocols/winrm.rs` (feature = `winrm`, in `default`), CLI `winrm://` / `winrms://`; default path `/wsman`; no silent Basic fallback.
 
 #### H. MSSQL TDS Login (Phase 18)
 

@@ -298,7 +298,7 @@ impl Cli {
         }
         if module.insecure && !service.allows_insecure() {
             return Err(invalid(
-                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp, mssql)",
+                "--insecure requires a TLS-capable target (https, smtp/smtps, imap/imaps, ldap/ldaps, rdp, mssql, winrms)",
             ));
         }
         if module.ssh_key.is_some() && service != Service::Ssh {
@@ -350,8 +350,10 @@ pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
             "Target URLs cannot contain passwords or fragments; use -p or -P for passwords",
         ));
     }
-    if !service.is_http() && (!matches!(url.path(), "" | "/") || url.query().is_some()) {
-        return Err(invalid("Paths and query strings require an HTTP target"));
+    if !service.preserves_path() && (!matches!(url.path(), "" | "/") || url.query().is_some()) {
+        return Err(invalid(
+            "Paths and query strings require an HTTP or WinRM target",
+        ));
     }
     let host = match url.host() {
         Some(Host::Domain(host)) if !host.is_empty() => host.to_owned(),
@@ -373,7 +375,7 @@ pub(crate) fn parse_url(value: &str) -> Result<TargetInput, clap::Error> {
                 .into_owned(),
         )
     };
-    let path = service.is_http().then(|| {
+    let path = service.preserves_path().then(|| {
         let mut path = url.path().to_owned();
         if let Some(query) = url.query() {
             path.push('?');
