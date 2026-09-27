@@ -24,6 +24,8 @@ pub enum Service {
     Smb,
     Rdp,
     Mssql,
+    Winrm,
+    Winrms,
 }
 
 impl Service {
@@ -47,6 +49,8 @@ impl Service {
             Self::Smb => 445,
             Self::Rdp => 3389,
             Self::Mssql => 1433,
+            Self::Winrm => 5985,
+            Self::Winrms => 5986,
         }
     }
 
@@ -70,18 +74,26 @@ impl Service {
             Self::Smb => "smb",
             Self::Rdp => "rdp",
             Self::Mssql => "mssql",
+            Self::Winrm => "winrm",
+            Self::Winrms => "winrms",
         }
     }
 
     /// Human-readable list of supported scheme tokens for diagnostics.
     #[must_use]
     pub const fn supported_schemes() -> &'static str {
-        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql"
+        "ftp, ssh, http, https, smtp, smtps, mysql, postgres (or postgresql), redis, imap, imaps, ldap, ldaps, smb, rdp, mssql, winrm, winrms"
     }
 
     #[must_use]
     pub(crate) const fn is_http(self) -> bool {
         matches!(self, Self::Http | Self::Https)
+    }
+
+    /// Whether URL path/query may be preserved (HTTP form auth and `WinRM` `/wsman`).
+    #[must_use]
+    pub(crate) const fn preserves_path(self) -> bool {
+        matches!(self, Self::Http | Self::Https | Self::Winrm | Self::Winrms)
     }
 
     #[must_use]
@@ -92,7 +104,10 @@ impl Service {
     /// Whether the default transport implies TLS without STARTTLS negotiation.
     #[must_use]
     pub(crate) const fn uses_ssl(self) -> bool {
-        matches!(self, Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps)
+        matches!(
+            self,
+            Self::Https | Self::Smtps | Self::Imaps | Self::Ldaps | Self::Winrms
+        )
     }
 
     /// Whether `--insecure` / `-k` is meaningful (TLS present on the path).
@@ -109,6 +124,7 @@ impl Service {
                 | Self::Ldaps
                 | Self::Rdp
                 | Self::Mssql
+                | Self::Winrms
         )
     }
 
@@ -135,6 +151,8 @@ impl Service {
             "smb" => Some(Self::Smb),
             "rdp" => Some(Self::Rdp),
             "mssql" => Some(Self::Mssql),
+            "winrm" => Some(Self::Winrm),
+            "winrms" => Some(Self::Winrms),
             _ => None,
         }
     }

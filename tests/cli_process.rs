@@ -503,6 +503,8 @@ fn dry_run_extended_protocols_validate_and_estimate_work() {
         "smb",
         "rdp",
         "mssql",
+        "winrm",
+        "winrms",
     ] {
         let mut args = vec![
             service,

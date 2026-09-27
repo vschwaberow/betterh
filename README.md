@@ -32,7 +32,7 @@ betterh <SERVICE> <TARGET> [OPTIONS]
 betterh <URL> [OPTIONS]
 ```
 
-Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`, `mssql`.
+Services: `ftp`, `ssh`, `http`, `https`, `smtp`, `smtps`, `mysql`, `postgres` (alias `postgresql`), `redis`, `imap`, `imaps`, `ldap`, `ldaps`, `smb`, `rdp`, `mssql`, `winrm`, `winrms`.
 
 ### Examples
 
@@ -63,6 +63,7 @@ betterh ldap://127.0.0.1:389 -u 'cn=alice,dc=example,dc=com' -P passwords.txt
 betterh smb://127.0.0.1 -u 'DOMAIN\alice' -P passwords.txt
 betterh rdp://127.0.0.1 -u alice -P passwords.txt --insecure
 betterh mssql://127.0.0.1 -u sa -P passwords.txt --database master --insecure
+betterh winrms://127.0.0.1 -u alice -P passwords.txt --insecure
 
 # Wordlist rules and seasonal mangling
 betterh ssh 127.0.0.1 -L users.txt -P passwords.txt --rules rules.txt -e y,c --rule-year 2026
@@ -104,6 +105,7 @@ Production SMB / RDP modules (feasibility features re-export codecs):
 cargo test --features smb protocols::smb
 cargo test --features rdp protocols::rdp
 cargo test --features mssql protocols::mssql
+cargo test --features winrm protocols::winrm
 cargo test --features feasibility-rdp feasibility::rdp
 ```
 

@@ -14,7 +14,8 @@
     feature = "ldap",
     feature = "smb",
     feature = "rdp",
-    feature = "mssql"
+    feature = "mssql",
+    feature = "winrm"
 ))]
 pub mod io;
 pub mod mock;
@@ -29,7 +30,8 @@ pub mod mock;
     feature = "ldap",
     feature = "smb",
     feature = "rdp",
-    feature = "mssql"
+    feature = "mssql",
+    feature = "winrm"
 ))]
 pub mod socks;
 pub mod types;
@@ -72,6 +74,9 @@ pub mod rdp;
 
 #[cfg(feature = "mssql")]
 pub mod mssql;
+
+#[cfg(feature = "winrm")]
+pub mod winrm;
 
 use std::time::Duration;
 
@@ -166,3 +171,6 @@ pub use rdp::RdpModule;
 
 #[cfg(feature = "mssql")]
 pub use mssql::MssqlModule;
+
+#[cfg(feature = "winrm")]
+pub use winrm::WinrmModule;

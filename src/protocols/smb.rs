@@ -565,7 +565,8 @@ pub fn split_domain_user(username: &str) -> (String, String) {
     (String::new(), username.to_owned())
 }
 
-fn filetime_now() -> u64 {
+#[must_use]
+pub fn filetime_now() -> u64 {
     const EPOCH_DIFF: u64 = 116_444_736_000_000_000;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
