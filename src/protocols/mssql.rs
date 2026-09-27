@@ -168,6 +168,9 @@ pub fn decode_tds_packet(bytes: &[u8]) -> Result<(u8, Vec<u8>), &'static str> {
     if total < 8 {
         return Err("TDS length too small");
     }
+    if total > 64 * 1024 {
+        return Err("TDS length exceeds maximum");
+    }
     if bytes.len() < total {
         return Err("TDS payload truncated");
     }

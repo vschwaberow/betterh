@@ -69,6 +69,14 @@ pub fn realm_from_host(host: &str) -> Option<String> {
     Some(rest.to_ascii_uppercase())
 }
 
+/// Panic-free Kerberos decoder surface for fuzzing.
+pub fn fuzz_decode(data: &[u8]) {
+    let _ = decode_kdc_message(data);
+    if let Ok(pdu) = unframe_tcp(data) {
+        let _ = decode_kdc_message(pdu);
+    }
+}
+
 /// Kerberos AS-REQ authentication module.
 #[derive(Debug, Default, Clone)]
 pub struct KerberosModule {

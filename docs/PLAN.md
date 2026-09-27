@@ -196,6 +196,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 22.2 Community-string auth (v1 / v2c)                          |
 |  - 22.3 SNMPv3 USM discovery, auth (MD5/SHA) & priv (DES/AES)     |
 |  - 22.4 CLI snmp://, hermetic mocks, docs                         |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 23: Wire Codec Fuzzing & Protocol Hardening Harness       |
+|  - 23.1 cargo-fuzz workspace, sanitizers & seed corpora           |
+|  - 23.2 Protocol decoder fuzz targets                             |
+|  - 23.3 Parser hardening & defensive bounds checks                |
+|  - 23.4 CI fuzz smoke gate & documentation                        |
 +-------------------------------------------------------------------+
 ```
 
@@ -1292,6 +1301,55 @@ cargo fmt --check
 
 ---
 
+## Phase 23: Wire Codec Fuzzing & Protocol Hardening Harness
+
+**Goal**: Comprehensive robustness, memory-safety, and panic-free validation of all handwritten binary wire parsers (SMB2, NTLMv2, RDP TPKT/X.224, TDS, Kerberos, SNMP, LDAP BER, MySQL, PostgreSQL, POP3) using LLVM `libFuzzer` via `cargo-fuzz`.
+
+**Depends on**: All protocol wire codecs (Phases 8–22).
+
+### Tasks
+- [x] **Task 23.1: Fuzzing Infrastructure & Corpus Management (`fuzz/`)**
+  - **Description**: Initialize `cargo-fuzz` workspace with `fuzz/Cargo.toml` and sanitizer settings (`AddressSanitizer`, `UndefinedBehaviorSanitizer`). Seed corpora with valid wire captures from existing hermetic unit tests.
+  - **Acceptance**: `cargo fuzz list` lists all protocol targets; initial corpora seed and execute cleanly.
+  - **Files**: `fuzz/Cargo.toml`, `fuzz/fuzz_targets/mod.rs`
+  - **Verify**: `cargo fuzz check`.
+
+- [x] **Task 23.2: Protocol Decoder Fuzz Targets (`fuzz/fuzz_targets/*.rs`)**
+  - **Description**: Implement fuzz targets for every handwritten protocol decoder:
+    - `fuzz_smb_decode`: NetBIOS framing, SMB2 negotiate/setup headers, NTLMSSP challenge tokens.
+    - `fuzz_rdp_decode`: TPKT, X.224 connection confirmations, CredSSP `TSRequest` BER parser.
+    - `fuzz_tds_decode`: TDS packet headers, PRELOGIN option parsing, LOGINACK token streams.
+    - `fuzz_kerberos_decode`: Kerberos ASN.1 DER KDC-REP and KRB-ERROR decoders.
+    - `fuzz_snmp_decode`: SNMP ASN.1 BER message and PDU decoders.
+    - `fuzz_ldap_ber`: ASN.1 BER sequence and tag-length-value recursive decoders.
+    - `fuzz_db_codecs`: MySQL packet framing and Postgres 3.0 frontend/backend message readers.
+  - **Acceptance**: All fuzz targets run 1,000,000+ iterations without panics, memory corruption, or infinite loops.
+  - **Files**: `fuzz/fuzz_targets/*.rs`
+  - **Verify**: Local fuzz runs for 60 seconds per target.
+
+- [x] **Task 23.3: Parser Hardening & Defensive Bounds Checks**
+  - **Description**: Harden all decoders against untrusted inputs: enforce strict maximum packet size limits (e.g. 64 KB for TDS/SMB frames, 16 KB for LDAP/SNMP BER), guard integer arithmetic against overflow, and replace direct indexing with checked slicing.
+  - **Acceptance**: Zero panics or out-of-bounds errors on fuzz generated inputs.
+  - **Files**: `src/protocols/**/*.rs`
+  - **Verify**: Regression test suite running against crash artifacts.
+
+- [x] **Task 23.4: Automated Fuzzing CI Smoke Gate & Documentation**
+  - **Description**: Add a GitHub Actions CI workflow running a smoke check against all fuzz targets using seeds to prevent regressions. Document fuzzing workflow and reproduction steps in `docs/SPEC.md`.
+  - **Acceptance**: Fuzz smoke check runs in CI in $< 30\text{ seconds}$; documentation clear.
+  - **Files**: `.github/workflows/fuzz.yml`, `docs/SPEC.md`, `README.md`, `CHANGELOG.md`
+  - **Verify**: CI workflow run, `cargo test --all-targets --all-features --locked`.
+
+### Phase 23 Checkpoint
+
+```bash
+cargo check --manifest-path fuzz/Cargo.toml
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1310,6 +1368,7 @@ cargo fmt --check
 | **POP3 Auth Module** | Hermetic POP3/POP3S mocks | `cargo test protocols::pop3` |
 | **Lockout Safeguard** | Per-user cool/quarantine | `cargo test engine::lockout` |
 | **SNMP Module** | Hermetic SNMPv1/v2c/v3 UDP mocks | `cargo test protocols::snmp` |
+| **Fuzz Harness** | Decoder smoke / cargo-fuzz targets | `cargo test protocols::fuzz_api` / `cargo fuzz list` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

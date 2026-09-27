@@ -3,6 +3,7 @@
 
 //! Authentication contract shared by native protocol modules.
 
+pub mod fuzz_api;
 #[cfg(any(
     feature = "ftp",
     feature = "ssh",
@@ -96,6 +97,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use uuid::Uuid;
 
+pub use fuzz_api::{MAX_INPUT, smoke_all};
 pub use types::{AuthResult, CanaryStatus, Credential, ProtocolError, Target};
 
 #[async_trait]

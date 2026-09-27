@@ -158,6 +158,9 @@ fn decode_length(data: &[u8]) -> Result<(usize, usize), BerError> {
     for &b in &data[1..=nbytes] {
         len = (len << 8) | usize::from(b);
     }
+    if len > 16 * 1024 {
+        return Err(BerError::InvalidLength);
+    }
     Ok((len, 1 + nbytes))
 }
 

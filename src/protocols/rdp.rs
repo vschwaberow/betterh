@@ -103,6 +103,9 @@ impl Tpkt {
         if total < 4 {
             return Err("TPKT length too small");
         }
+        if total > 64 * 1024 {
+            return Err("TPKT length exceeds maximum");
+        }
         if bytes.len() < total {
             return Err("TPKT payload truncated");
         }

@@ -473,6 +473,13 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Security**: Never log community strings or localized keys; bounded UDP timeouts.
 - **Module**: `src/protocols/snmp/` (feature = `snmp`).
 
+#### M. Wire Codec Fuzzing & Resilience Harness (Phase 23)
+
+- **Infrastructure**: Dedicated `fuzz/` workspace powered by LLVM `libFuzzer` (`cargo-fuzz`).
+- **Targets**: `fuzz_smb_decode`, `fuzz_rdp_decode`, `fuzz_tds_decode`, `fuzz_kerberos_decode`, `fuzz_snmp_decode`, `fuzz_ldap_ber`, `fuzz_db_codecs`.
+- **Invariants**: Panic-free and bounded allocation on adversarial inputs; max packet ceiling of 64 KB via `protocols::fuzz_api`.
+- **Directory**: `fuzz/` (+ CI smoke in `.github/workflows/fuzz.yml`).
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:
