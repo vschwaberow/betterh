@@ -97,16 +97,51 @@ pub fn decode_kdc_message(pdu: &[u8]) -> Result<KdcMessage, ProtocolError> {
     ))
 }
 
-/// Extract AES-256 salt from `ETYPE-INFO2` inside KRB-ERROR `e-data`, if present.
+/// Pre-auth material selected from KDC `ETYPE-INFO2` (or defaults).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreAuthMaterial {
+    pub salt: String,
+    pub etype: i32,
+    pub iterations: u32,
+}
+
+const DEFAULT_AES_ITERATIONS: u32 = 4096;
+/// Cap hostile / enormous PBKDF2 counts from `s2kparams`.
+const MAX_S2K_ITERATIONS: u32 = 5_000_000;
+
+/// Prefer modern AES etypes, then RC4, matching [`DEFAULT_ETYPES`] order.
+fn prefer_etype(offered: &[i32], forced: Option<i32>) -> i32 {
+    if let Some(etype) = forced {
+        return etype;
+    }
+    for preferred in DEFAULT_ETYPES {
+        if offered.contains(&preferred) {
+            return preferred;
+        }
+    }
+    ETYPE_AES256
+}
+
+/// Extract salt, etype, and PBKDF2 iterations from `ETYPE-INFO2` inside KRB-ERROR `e-data`.
 #[must_use]
-pub fn salt_from_edata(e_data: Option<&[u8]>, realm: &str, user: &str) -> String {
-    let fallback = format!("{realm}{user}");
+pub fn preauth_from_edata(
+    e_data: Option<&[u8]>,
+    realm: &str,
+    user: &str,
+    forced_etype: Option<i32>,
+) -> PreAuthMaterial {
+    let fallback_salt = format!("{realm}{user}");
+    let default = PreAuthMaterial {
+        salt: fallback_salt.clone(),
+        etype: forced_etype.unwrap_or(ETYPE_AES256),
+        iterations: DEFAULT_AES_ITERATIONS,
+    };
     let Some(bytes) = e_data else {
-        return fallback;
+        return default;
     };
     let mut reader = kerbcore::der::Der::new(bytes);
     let Ok(seq) = reader.expect(kerbcore::der::TAG_SEQUENCE) else {
-        return fallback;
+        return default;
     };
     let mut seq_reader = kerbcore::der::Der::new(seq);
     while !seq_reader.is_empty() {
@@ -122,20 +157,27 @@ pub fn salt_from_edata(e_data: Option<&[u8]>, realm: &str, user: &str) -> String
         let Ok(entries) = parse_etype_info2(&pd.padata_value) else {
             continue;
         };
-        for entry in &entries {
-            if entry.etype == ETYPE_AES256
-                && let Some(salt) = &entry.salt
-            {
-                return salt.clone();
-            }
-        }
-        for entry in entries {
-            if let Some(salt) = entry.salt {
-                return salt;
-            }
-        }
+        let offered: Vec<i32> = entries.iter().map(|e| e.etype).collect();
+        let etype = prefer_etype(&offered, forced_etype);
+        let entry = entries
+            .iter()
+            .find(|e| e.etype == etype)
+            .or_else(|| entries.first());
+        let Some(entry) = entry else {
+            return default;
+        };
+        let salt = entry.salt.clone().unwrap_or_else(|| fallback_salt.clone());
+        let iterations = entry
+            .s2k_iterations()
+            .unwrap_or(DEFAULT_AES_ITERATIONS)
+            .min(MAX_S2K_ITERATIONS);
+        return PreAuthMaterial {
+            salt,
+            etype,
+            iterations,
+        };
     }
-    fallback
+    default
 }
 
 #[cfg(test)]
@@ -170,6 +212,31 @@ mod tests {
         // APPLICATION 10 = 0x6A
         assert_eq!(der.first().copied(), Some(0x6A));
         assert!(der.len() > 32);
+    }
+
+    #[test]
+    fn prefer_etype_order() {
+        assert_eq!(
+            prefer_etype(&[ETYPE_RC4_HMAC, ETYPE_AES128, ETYPE_AES256], None),
+            ETYPE_AES256
+        );
+        assert_eq!(
+            prefer_etype(&[ETYPE_RC4_HMAC, ETYPE_AES128], None),
+            ETYPE_AES128
+        );
+        assert_eq!(prefer_etype(&[ETYPE_RC4_HMAC], None), ETYPE_RC4_HMAC);
+        assert_eq!(
+            prefer_etype(&[ETYPE_AES256], Some(ETYPE_RC4_HMAC)),
+            ETYPE_RC4_HMAC
+        );
+    }
+
+    #[test]
+    fn preauth_fallback_without_edata() {
+        let m = preauth_from_edata(None, "CORP.LOCAL", "alice", None);
+        assert_eq!(m.salt, "CORP.LOCALalice");
+        assert_eq!(m.etype, ETYPE_AES256);
+        assert_eq!(m.iterations, 4096);
     }
 
     #[test]

@@ -214,6 +214,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 24.2 DES-CBC & AES-128-CFB scoped-PDU crypto                   |
 |  - 24.3 Wire authPriv encode/decode & SnmpModule                  |
 |  - 24.4 Docs, CHANGELOG & quality gate                            |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 25: Kerberos Multi-Etype Pre-Auth (AES128 / RC4-HMAC)     |
+|  - 25.1 ETYPE-INFO2 preference & salt/iterations                  |
+|  - 25.2 Generalized string-to-key & PA-ENC-TIMESTAMP              |
+|  - 25.3 Wire AS exchange & --kerberos-etype CLI                   |
+|  - 25.4 Docs, CHANGELOG & quality gate                            |
 +-------------------------------------------------------------------+
 ```
 
@@ -1400,6 +1409,47 @@ cargo fmt --check
 
 ---
 
+## Phase 25: Kerberos Multi-Etype Pre-Auth (AES128 / RC4-HMAC)
+
+**Goal**: Honor KDC `ETYPE-INFO2` offers beyond AES-256 so AS-REQ `PA-ENC-TIMESTAMP` works against AES-128-only and legacy RC4-HMAC domains, matching SPEC §J.
+
+**Depends on**: Phase 20 Kerberos module + `kerbcore`.
+
+### Tasks
+- [x] **Task 25.1: Etype Preference & Salt Selection from `ETYPE-INFO2`**
+  - **Description**: Parse KDC etype offers; prefer AES256 → AES128 → RC4; return salt + etype + PBKDF2 iterations (`s2kparams`) with realm+user fallback.
+  - **Acceptance**: Unit tests cover preference order and salt fallback.
+  - **Files**: `src/protocols/kerberos/codec.rs`
+  - **Verify**: `cargo test protocols::kerberos::codec`
+
+- [x] **Task 25.2: Generalized String-to-Key & PA-ENC-TIMESTAMP**
+  - **Description**: Replace AES-256-only helpers with etype-dispatched `string_to_key` / `build_pa_enc_timestamp` via `kerbcore::KerberosKey` (`Aes128`, `Aes256`, `Rc4Hmac`).
+  - **Acceptance**: Round-trip encrypt/decrypt tests for AES128 and RC4; PA-DATA etype matches key.
+  - **Files**: `src/protocols/kerberos/crypto.rs`
+  - **Verify**: `cargo test protocols::kerberos::crypto`
+
+- [x] **Task 25.3: Wire AS Exchange & Optional CLI Override**
+  - **Description**: `run_as_exchange` uses selected etype; optional `--kerberos-etype aes256|aes128|rc4|auto` (default `auto`).
+  - **Acceptance**: Hermetic mocks succeed for AES128 and RC4 paths; AES256 regression green.
+  - **Files**: `src/protocols/kerberos/mod.rs`, `src/cli.rs`, `src/engine/modules.rs`
+  - **Verify**: `cargo test protocols::kerberos`
+
+- [x] **Task 25.4: Docs, CHANGELOG & Quality Gate**
+  - **Description**: Update SPEC §J, PLAN, README, CHANGELOG; mark tasks done.
+  - **Acceptance**: Quality gate green.
+  - **Files**: `docs/SPEC.md`, `docs/PLAN.md`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo fmt --check && cargo clippy --all-targets --all-features --locked -- -D warnings && cargo test --all-features --locked`
+
+### Phase 25 Checkpoint
+
+```bash
+cargo test protocols::kerberos --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1420,6 +1470,7 @@ cargo fmt --check
 | **SNMP Module** | Hermetic SNMPv1/v2c/v3 UDP mocks | `cargo test protocols::snmp` |
 | **Fuzz Harness** | Decoder smoke / cargo-fuzz targets | `cargo test protocols::fuzz_api` / `cargo fuzz list` |
 | **SNMP authPriv** | DES/AES scoped-PDU round-trips | `cargo test protocols::snmp` |
+| **Kerberos etypes** | AES128/RC4 PA-ENC-TIMESTAMP | `cargo test protocols::kerberos` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

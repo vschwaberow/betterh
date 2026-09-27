@@ -447,7 +447,7 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 #### J. Kerberos Pre-Authentication (Phase 20)
 
 - **Transport**: TCP/88 (4-byte length prefix) and UDP/88 (raw datagrams); Kerberos v5 (RFC 4120).
-- **Auth**: `AS-REQ` with `PA-ENC-TIMESTAMP` encrypted with derived user key (AES256-CTS-HMAC-SHA1-96, AES128-CTS-HMAC-SHA1-96, or RC4-HMAC).
+- **Auth**: `AS-REQ` with `PA-ENC-TIMESTAMP` encrypted with derived user key. Etype selected from KDC `ETYPE-INFO2` preferring AES256-CTS-HMAC-SHA1-96 → AES128-CTS-HMAC-SHA1-96 → RC4-HMAC (override via `--kerberos-etype`).
 - **Error Mapping**:
   - `AS-REP` (msg 11) $\to$ `AuthResult::Success`
   - `KDC_ERR_PREAUTH_FAILED` (24) $\to$ `AuthResult::Failure`
@@ -455,7 +455,7 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
   - `KDC_ERR_CLIENT_REVOKED` (18) $\to$ `AuthResult::LockedOut`
   - `KDC_ERR_SVC_UNAVAILABLE` (29) $\to$ `AuthResult::RateLimited`
 - **Security**: Offload crypto key derivation to `spawn_blocking`; never log timestamps or ciphertexts; support `--realm <REALM>` override (auto-derived from target FQDN if omitted).
-- **Module**: `src/protocols/kerberos/` (feature = `kerberos`, in `default`), CLI `kerberos://`, `--realm`; TCP/88 length-prefixed AS exchange via `kerbcore`.
+- **Module**: `src/protocols/kerberos/` (feature = `kerberos`, in `default`), CLI `kerberos://`, `--realm`, `--kerberos-etype auto|aes256|aes128|rc4`; TCP/88 length-prefixed AS exchange via `kerbcore`.
 
 #### K. Intelligent Account Lockout Safeguard (Phase 21)
 
@@ -486,6 +486,12 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Keys**: Privacy key is the first 16 octets of the localized USM key from the auth password (or dedicated priv password).
 - **CLI**: `--snmp-priv none|des|aes`, `--snmp-priv-password` (defaults to auth password).
 - **Module**: `src/protocols/snmp/usm.rs` (+ `aes`/`des`/`cbc`/`cfb-mode` feature deps).
+
+#### O. Kerberos Multi-Etype Pre-Auth (Phase 25)
+
+- **Selection**: From `ETYPE-INFO2` entries honor salt and AES `s2kparams` iteration count; preference AES256 → AES128 → RC4 unless CLI forces an etype.
+- **Crypto**: `kerbcore::KerberosKey::string_to_key` for all three etypes; RC4 uses NT hash (no PBKDF2).
+- **CLI**: `--kerberos-etype auto|aes256|aes128|rc4` (default `auto`).
 
 ## 6. Idiomatic Rust Architecture & Patterns
 

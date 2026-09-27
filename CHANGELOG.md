@@ -14,6 +14,7 @@ Update this file in the same pull request as user-visible changes.
 - Phase 14 refactor: canonical `Service` registry (`src/service.rs`), `engine/modules.rs` builders, shared `protocols/io` dial/CRLF helpers; feasibility codecs remain thin re-exports of production SMB/RDP
 
 ### Added
+- Kerberos multi-etype pre-auth: AES128 / RC4-HMAC via `ETYPE-INFO2` preference and `--kerberos-etype`
 - SNMPv3 USM authPriv (`--snmp-priv des|aes`): DES-CBC and AES-128-CFB scoped-PDU privacy (RFC 3414 / RFC 3826)
 - Wire-codec fuzzing harness (`fuzz/`): libFuzzer targets for SMB/RDP/TDS/Kerberos/SNMP/LDAP/DB decoders, `protocols::fuzz_api` panic-free entry points, seed corpora, and CI smoke workflow
 - SNMP v1/v2c community and SNMPv3 USM ProtocolModule (`snmp://`, UDP/161): GetRequest `sysDescr.0`, discovery Report engine-ID, `--snmp-version` / `--snmp-auth` / `--snmp-priv`, hermetic UDP mocks

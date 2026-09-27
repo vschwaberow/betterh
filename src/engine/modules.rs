@@ -228,13 +228,19 @@ fn pop3_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModul
 }
 
 fn kerberos_module(cli: &Cli, proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
-    gated!(
-        "kerberos",
-        "Kerberos",
+    gated!("kerberos", "Kerberos", {
+        use crate::protocols::KerberosEtypeMode;
+        let etype = match cli.module.kerberos_etype.as_str() {
+            "aes256" => KerberosEtypeMode::Aes256,
+            "aes128" => KerberosEtypeMode::Aes128,
+            "rc4" => KerberosEtypeMode::Rc4,
+            _ => KerberosEtypeMode::Auto,
+        };
         crate::protocols::KerberosModule::new()
             .with_proxy(proxy)
             .with_realm(cli.module.realm.clone())
-    )
+            .with_etype(etype)
+    })
 }
 
 fn snmp_module(cli: &Cli) -> Result<Arc<dyn ProtocolModule>, RunError> {
