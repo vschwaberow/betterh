@@ -95,6 +95,8 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 ## Develop
 
+SNMPv3 privacy: `--snmp-version 3 --snmp-auth sha|md5 --snmp-priv aes|des` (optional `--snmp-priv-password`).
+
 Protocol decoder fuzzing (nightly + `cargo-fuzz`):
 
 ```bash

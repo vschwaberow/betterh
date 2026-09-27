@@ -205,6 +205,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 23.2 Protocol decoder fuzz targets                             |
 |  - 23.3 Parser hardening & defensive bounds checks                |
 |  - 23.4 CI fuzz smoke gate & documentation                        |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 24: SNMPv3 USM Privacy (authPriv DES / AES-CFB128)        |
+|  - 24.1 Priv key derivation, salt & IV construction               |
+|  - 24.2 DES-CBC & AES-128-CFB scoped-PDU crypto                   |
+|  - 24.3 Wire authPriv encode/decode & SnmpModule                  |
+|  - 24.4 Docs, CHANGELOG & quality gate                            |
 +-------------------------------------------------------------------+
 ```
 
@@ -1350,6 +1359,47 @@ cargo fmt --check
 
 ---
 
+## Phase 24: SNMPv3 USM Privacy (authPriv DES / AES-CFB128)
+
+**Goal**: Complete SNMPv3 User-based Security Model privacy so `--snmp-priv des|aes` encrypts and decrypts scoped PDUs on the wire (RFC 3414 DES-CBC, RFC 3826 AES-128-CFB), closing the Phase 22 authNoPriv-only gap.
+
+**Depends on**: Phase 22 SNMP module.
+
+### Tasks
+- [x] **Task 24.1: Privacy Key Derivation & Salt / IV Construction**
+  - **Description**: Derive 16-byte privacy keys from localized USM keys; build DES 8-octet salts (`engineBoots || local`) and AES 8-octet salts; compute DES pre-IV XOR and AES boots/time IV per RFCs.
+  - **Acceptance**: Unit tests cover MD5/SHA1 auth → 16-byte priv key truncation; deterministic IV vectors.
+  - **Files**: `src/protocols/snmp/usm.rs`
+  - **Verify**: `cargo test protocols::snmp::usm`
+
+- [x] **Task 24.2: DES-CBC & AES-128-CFB Encrypt / Decrypt**
+  - **Description**: Implement scoped-PDU privacy encrypt/decrypt; DES zero-pads to 8-octet blocks; AES-CFB needs no padding. Refuse plaintext when priv flag is set.
+  - **Acceptance**: Round-trip encrypt→decrypt restores scoped PDU for both algorithms.
+  - **Files**: `src/protocols/snmp/usm.rs`, `Cargo.toml` (`aes`, `des`, `cbc`, `cfb-mode`)
+  - **Verify**: `cargo test protocols::snmp::usm -- --nocapture`
+
+- [x] **Task 24.3: Wire authPriv Through Encode / Decode & Module**
+  - **Description**: Extend `encode_authenticated_get_request` / `decode_authenticated_response` with priv key + salt; set `MSG_FLAG_PRIV`; `SnmpModule::authenticate_v3` derives priv key from `--snmp-priv-password` (fallback auth password).
+  - **Acceptance**: `--snmp-priv aes` and `des` succeed against hermetic UDP mocks; `none` path unchanged.
+  - **Files**: `src/protocols/snmp/usm.rs`, `src/protocols/snmp/mod.rs`
+  - **Verify**: `cargo test protocols::snmp`
+
+- [x] **Task 24.4: Docs, CHANGELOG & Quality Gate**
+  - **Description**: Update SPEC §L, README SNMP flags, CHANGELOG; mark PLAN tasks done.
+  - **Acceptance**: Spec no longer says privacy is rejected; quality gate green.
+  - **Files**: `docs/SPEC.md`, `docs/PLAN.md`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo fmt --check && cargo clippy --all-targets --all-features --locked -- -D warnings && cargo test --all-features --locked`
+
+### Phase 24 Checkpoint
+
+```bash
+cargo test protocols::snmp --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1369,6 +1419,7 @@ cargo fmt --check
 | **Lockout Safeguard** | Per-user cool/quarantine | `cargo test engine::lockout` |
 | **SNMP Module** | Hermetic SNMPv1/v2c/v3 UDP mocks | `cargo test protocols::snmp` |
 | **Fuzz Harness** | Decoder smoke / cargo-fuzz targets | `cargo test protocols::fuzz_api` / `cargo fuzz list` |
+| **SNMP authPriv** | DES/AES scoped-PDU round-trips | `cargo test protocols::snmp` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
