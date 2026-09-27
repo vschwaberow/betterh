@@ -947,31 +947,38 @@ cargo fmt --check
 **Depends on**: Phase 13 SMB NTLMv2 helpers (or equivalent shared crypto from Phase 14.4); Phase 9 `TransportStream`.
 
 ### Tasks
-- [ ] **Task 16.1: TPKT / X.224 / `RDP_NEG` Wire Path & TLS Upgrade**
+- [x] **Task 16.1: TPKT / X.224 / `RDP_NEG` Wire Path & TLS Upgrade**
   - **Description**: Implement `RdpModule` (feature = `rdp`) with TPKT + X.224 Connection Request (cookie + `RDP_NEG_REQ` requesting `PROTOCOL_SSL|HYBRID|HYBRID_EX`), parse `RDP_NEG_RSP`/`FAILURE`, then upgrade the same TCP socket with TLS when Hybrid/SSL is selected. Promote framing from `src/feasibility/rdp.rs` into `src/protocols/rdp.rs` without duplicating codecs. NLA-only: reject or hard-error legacy `PROTOCOL_RDP` without TLS for auth audits.
   - **Acceptance**: Hermetic mock completes negotiate → TLS-ready state; clear error if peer forces non-NLA-only legacy security.
   - **Files**: `src/protocols/rdp.rs`, `src/protocols/mod.rs`, `src/feasibility/rdp.rs`, `Cargo.toml` (`rdp`)
   - **Verify**: Unit/mock tests for TPKT/X.224/`RDP_NEG` round-trips and TLS wrap.
 
-- [ ] **Task 16.2: CredSSP `TSRequest` + NTLMv2 NLA**
+- [x] **Task 16.2: CredSSP `TSRequest` + NTLMv2 NLA**
   - **Description**: On the TLS stream, exchange CredSSP `TSRequest` negoTokens carrying SPNEGO/NTLMSSP Type 1→2→3 using shared NTLMv2 proofs. Map auth outcomes to `AuthResult`. Timeouts on every read/write; cooperative cancellation; SOCKS5 dial via existing helper.
   - **Acceptance**: Mock CredSSP peer: success and wrong-password paths; no password/NT hash in `tracing`/`Display` of errors.
   - **Files**: `src/protocols/rdp.rs`, shared NTLM helpers
   - **Verify**: Hermetic mock listener tests in `src/protocols/rdp.rs`.
 
-- [ ] **Task 16.3: `pubKeyAuth` Channel Binding & `TSCredentials` Encryption**
+- [x] **Task 16.3: `pubKeyAuth` Channel Binding & `TSCredentials` Encryption**
   - **Description**: Implement CredSSP server public-key binding (`pubKeyAuth`) and encrypted `TSCredentials` as required for real Windows NLA peers. Fail closed on binding mismatch. Document Extended CredSSP (`PROTOCOL_HYBRID_EX`) nonce handling support level; Kerberos mech remains out of scope.
   - **Acceptance**: Mock or recorded-vector tests cover binding success/failure; wrong binding → Failure (not Success); clippy/fmt clean.
   - **Files**: `src/protocols/rdp.rs`, `docs/SPEC.md` §D.2 production notes
   - **Verify**: Dedicated unit tests for binding and credential blob encode/decode.
 
-- [ ] **Task 16.4: CLI Wiring (`rdp://`), Safety Review, Docs**
+- [x] **Task 16.4: CLI Wiring (`rdp://`), Safety Review, Docs**
   - **Description**: Add `Service::Rdp` (port 3389, `rdp://`); register module; CLI dry-run; README/CHANGELOG. Safety checklist: no secret logging, `--insecure` gated, explicit decision whether `rdp` is in Cargo `default`.
   - **Acceptance**: `betterh rdp ...` parses/validates/dry-runs; `cargo test protocols::rdp` green; SPEC tree lists `protocols/rdp.rs`.
   - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
   - **Verify**: `cargo test protocols::rdp`, clippy `-D warnings`, `cargo fmt --check`.
 
 ### Phase 16 Checkpoint
+
+Completed (2026-09-26) on `feat/phase-16-rdp`: Tasks 16.1–16.4 implement `RdpModule`
+(TPKT/X.224/`RDP_NEG` → TLS → CredSSP v6 `TSRequest` with NTLMv2 Type 1/2/3,
+`clientNonce` SHA-256 `pubKeyAuth` binding, sealed `TSCredentials`), CLI `rdp://`,
+hermetic TLS mock success/failure/legacy-reject paths, and SPEC/README/CHANGELOG sync.
+`PROTOCOL_HYBRID_EX` is accepted when selected; Kerberos remains out of scope.
+`rdp` is in Cargo `default` (depends on `smb` + `tls`).
 
 ```bash
 cargo test protocols::rdp

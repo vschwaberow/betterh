@@ -35,6 +35,20 @@ impl TransportStream {
     pub fn plain(stream: TcpStream) -> Self {
         Self::Plain(stream)
     }
+
+    /// Return the peer end-entity certificate DER after a TLS handshake, if any.
+    #[must_use]
+    pub fn peer_certificate_der(&self) -> Option<Vec<u8>> {
+        match self {
+            Self::Tls(stream) => {
+                let (_, conn) = stream.get_ref();
+                conn.peer_certificates()
+                    .and_then(|certs| certs.first())
+                    .map(|cert| cert.as_ref().to_vec())
+            }
+            Self::Plain(_) => None,
+        }
+    }
 }
 
 impl AsyncRead for TransportStream {

@@ -337,6 +337,7 @@ fn service_name(service: Service) -> &'static str {
         Service::Ldap => "ldap",
         Service::Ldaps => "ldaps",
         Service::Smb => "smb",
+        Service::Rdp => "rdp",
     }
 }
 
@@ -436,6 +437,12 @@ fn build_module(
         Service::Smb => Ok(Arc::new(
             crate::protocols::SmbModule::new().with_proxy(proxy),
         )),
+        #[cfg(feature = "rdp")]
+        Service::Rdp => Ok(Arc::new(
+            crate::protocols::RdpModule::new()
+                .with_proxy(proxy)
+                .with_insecure(cli.module.insecure),
+        )),
         #[cfg(not(feature = "ftp"))]
         Service::Ftp => Err(RunError::Message(
             "FTP support was not compiled in (enable feature `ftp`)".into(),
@@ -475,6 +482,10 @@ fn build_module(
         #[cfg(not(feature = "smb"))]
         Service::Smb => Err(RunError::Message(
             "SMB support was not compiled in (enable feature `smb`)".into(),
+        )),
+        #[cfg(not(feature = "rdp"))]
+        Service::Rdp => Err(RunError::Message(
+            "RDP support was not compiled in (enable feature `rdp`)".into(),
         )),
     }
 }

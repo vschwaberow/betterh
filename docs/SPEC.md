@@ -411,7 +411,7 @@ Architectural Boundary: Kept in a dedicated feasibility and prototyping phase (`
   - **Go (prototype proven)**: TPKT ↔ X.224 `CR` with cookie + `RDP_NEG_REQ`/`RDP_NEG_RSP` framing, and minimal CredSSP `TSRequest` DER wrap/unwrap of an opaque NegoToken, are implementable in-tree without C.
   - **Remaining before a full `ProtocolModule`**: live TLS+CredSSP interop, `pubKeyAuth` channel binding, `TSCredentials` encryption, Extended CredSSP nonce handling, and Kerberos mech alternate — tracked as post-feasibility work.
 - **Prototype location**: `src/feasibility/rdp.rs` (feature = `feasibility-rdp`), hermetic unit tests only (no live RDP server required for Phase 11.2). NTLMv2 crypto reuse is documented against §D.1 (`feasibility-smb`); this crate feature stays independent so default CI can enable either gate alone.
-- **Production track (Phase 16)**: Full `ProtocolModule` at `src/protocols/rdp.rs` (feature `rdp`), CLI `rdp://`, port 3389. NLA path only (CredSSP + NTLMv2): negotiate Hybrid → TLS → `TSRequest` → Type 1/2/3 → `pubKeyAuth` binding → encrypted `TSCredentials`. Out of scope: graphics/channels, Kerberos, non-NLA legacy RDP security. Security: no credential logging; `--insecure` = cert verify bypass only; crypto in `spawn_blocking`.
+- **Production track (Phase 16)**: Full `ProtocolModule` at `src/protocols/rdp.rs` (feature `rdp`, in `default`), CLI `rdp://`, port 3389. NLA path only (CredSSP + NTLMv2): negotiate Hybrid/`HYBRID_EX` → TLS (`TransportStream`) → length-prefixed CredSSP v6 `TSRequest` → Type 1/2/3 (reuse `protocols::smb` NTLMv2) → `clientNonce` + SHA-256 `pubKeyAuth` channel binding → encrypted `TSCredentials`. `PROTOCOL_HYBRID_EX` is accepted when the peer selects it; binding uses the same v6 nonce path (no separate Extended-only crypto). Out of scope: graphics/channels, Kerberos, non-NLA legacy `PROTOCOL_RDP`. Security: no credential logging; `--insecure` = cert verify bypass only; crypto in `spawn_blocking`. `feasibility-rdp` re-exports production codecs.
 
 #### E. Post-Expansion Refactoring Track (Phase 14)
 
@@ -842,7 +842,7 @@ betterh/
     ├── feasibility/          # Phase 11 wire prototypes (feature-gated)
     │   ├── mod.rs
     │   ├── smb.rs            # SMBv2/NTLMSSP framing prototype (feasibility-smb)
-│   └── rdp.rs            # TPKT/X.224/CredSSP framing prototype (feasibility-rdp)
+│   └── rdp.rs            # re-exports protocols::rdp (feasibility-rdp)
     ├── protocols/            # ProtocolModule trait and implementations
     │   ├── mod.rs            # ProtocolModule trait and registry
     │   ├── mock.rs           # MockProtocolModule for deterministic unit tests
