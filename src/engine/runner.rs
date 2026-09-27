@@ -17,8 +17,8 @@ use crate::engine::scope::{Scope, ScopeError};
 use crate::engine::targets::{TargetError, expand};
 use crate::engine::wordlist::{CredentialInput, InputSource, WordlistError};
 use crate::engine::{
-    Attempt, Checkpoint, CheckpointEntry, Finding, FoundContext, MutationConfig, Pacer, PoolConfig,
-    PoolError, RuntimeCommand, SkipRules, SkipState, SprayConfig, SprayRound,
+    Attempt, Checkpoint, CheckpointEntry, Finding, FoundContext, LockoutGuard, MutationConfig,
+    Pacer, PoolConfig, PoolError, RuntimeCommand, SkipRules, SkipState, SprayConfig, SprayRound,
     credentials_with_mutations, listen_keys, on_discovery, prepare_target, run_brute, run_spray,
     save_checkpoint,
 };
@@ -147,22 +147,40 @@ pub async fn run_attack(
     let findings_buf = Arc::new(Mutex::new(Vec::<Finding>::new()));
     let findings_for_live = Arc::clone(&findings_buf);
     let live_cancel = cancel.clone();
+    let lockout = Arc::new(Mutex::new(LockoutGuard::new(
+        cli.max_failures_per_user,
+        cli.lockout_cooldown,
+    )));
+    let (quarantine_tx, mut quarantine_rx) = mpsc::unbounded_channel::<String>();
     let live_task = tokio::spawn(async move {
-        while let Some(finding) = live_rx.recv().await {
-            let _ = session.success(service, &finding.target, &finding.credential);
-            let _ = on_discovery(
-                on_found.as_deref(),
-                bell,
-                &FoundContext {
-                    service,
-                    target: &finding.target,
-                    credential: &finding.credential,
-                },
-            );
-            findings_for_live.lock().await.push(finding);
-            if live_cancel.is_cancelled() {
-                break;
+        loop {
+            tokio::select! {
+                biased;
+                finding = live_rx.recv() => {
+                    let Some(finding) = finding else { break; };
+                    let _ = session.success(service, &finding.target, &finding.credential);
+                    let _ = on_discovery(
+                        on_found.as_deref(),
+                        bell,
+                        &FoundContext {
+                            service,
+                            target: &finding.target,
+                            credential: &finding.credential,
+                        },
+                    );
+                    findings_for_live.lock().await.push(finding);
+                    if live_cancel.is_cancelled() {
+                        break;
+                    }
+                }
+                username = quarantine_rx.recv() => {
+                    let Some(username) = username else { continue; };
+                    let _ = session.account_quarantined(&username);
+                }
             }
+        }
+        while let Ok(username) = quarantine_rx.try_recv() {
+            let _ = session.account_quarantined(&username);
         }
         session.finish();
     });
@@ -170,7 +188,9 @@ pub async fn run_attack(
     let pool = PoolConfig::new(config.concurrency.get(), timeout, cancel.clone())
         .with_skip(Arc::clone(&skip))
         .with_pacer(Pacer::new(cli.delay, cli.jitter))
-        .with_live_findings(live_tx);
+        .with_live_findings(live_tx)
+        .with_lockout(Arc::clone(&lockout))
+        .with_quarantine_tx(quarantine_tx);
 
     let module_for_attack = Arc::clone(&module);
     let prepared_for_attack = prepared.clone();

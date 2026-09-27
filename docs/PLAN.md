@@ -178,6 +178,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 20.2 PA-ENC-TIMESTAMP & AES/RC4 string-to-key derivations      |
 |  - 20.3 Error code mapping & user enumeration detection           |
 |  - 20.4 CLI kerberos://, realm detection & hermetic tests         |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 21: Intelligent Account Lockout Safeguard                 |
+|  - 21.1 Per-user failure tracking & threshold enforcement         |
+|  - 21.2 Dynamic account suspend & wordlist queue deferral         |
+|  - 21.3 Lockout early-warning detection & permanent quarantine    |
+|  - 21.4 CLI flags (--max-failures-per-user), dry-run & tests      |
 +-------------------------------------------------------------------+
 ```
 
@@ -1186,6 +1195,50 @@ cargo fmt --check
 
 ---
 
+## Phase 21: Intelligent Account Lockout Safeguard (Lockout-Schutz)
+
+**Goal**: Proactively prevent domain and enterprise account lockouts during password spray and vertical brute-force audits via in-memory per-user attempt tracking, threshold enforcement, dynamic account cooling, and automatic queue re-insertion.
+
+**Depends on**: Phase 2/3 concurrency and wordlist engine, Phase 4 skip rules.
+
+### Tasks
+- [x] **Task 21.1: Per-User Failure Tracker & Policy Engine (`src/engine/lockout.rs`)**
+  - **Description**: Implement `LockoutGuard` tracking consecutive failures per user across targets. Configure `--max-failures-per-user <N>` (e.g. 2 or 3) and `--lockout-cooldown <DURATION>` (e.g. 15m, 30m). Maintain thread-safe atomic state for `(user, failure_count, last_failure_timestamp, status)`.
+  - **Acceptance**: Thread-safe failure increments; accurate detection when a user reaches the threshold.
+  - **Files**: `src/engine/lockout.rs`, `src/engine/mod.rs`
+  - **Verify**: Unit tests in `src/engine/lockout.rs`.
+
+- [x] **Task 21.2: Dynamic Account Suspend & Wordlist Queue Deferral**
+  - **Description**: When a user hits `max_failures_per_user`, suspend further credential attempts for that specific user. Seamlessly advance worker threads to subsequent users in the stream without stalling global concurrency. Scheduler re-awakens cooled users once their cooldown duration elapses.
+  - **Acceptance**: Suspended users yield no authentication attempts while in cooldown; automatically resume after cooldown window expires.
+  - **Files**: `src/engine/lockout.rs`, `src/engine/pool.rs`, `src/engine/spray.rs`
+  - **Verify**: Unit tests with virtual clock asserting deferral and resumption.
+
+- [x] **Task 21.3: Lockout Early-Warning Detection & Permanent Quarantine**
+  - **Description**: If any protocol module returns `AuthResult::LockedOut` (e.g. HTTP 423, Kerberos code 18, Windows 0xC0000234, MSSQL 18486), immediately quarantine that user permanently for the remainder of the audit session. Emit structured `ReportEvent::AccountQuarantined` in TUI and JSONL streams.
+  - **Acceptance**: Quarantined user receives zero subsequent attempts across all targets and worker threads.
+  - **Files**: `src/engine/lockout.rs`, `src/report/mod.rs`
+  - **Verify**: Mock attack run verifying quarantine on `AuthResult::LockedOut`.
+
+- [x] **Task 21.4: CLI Options, Dry-Run Display & Integration Tests**
+  - **Description**: Add `--max-failures-per-user <N>` and `--lockout-cooldown <DURATION>` flags to CLI. Display configured lockout threshold and cooldown window in pre-flight dry-run table. Add end-to-end integration tests.
+  - **Acceptance**: Dry-run reflects lockout safeguards; integration tests assert zero account lockout policy violations.
+  - **Files**: `src/cli.rs`, `src/engine/dryrun.rs`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo test --test cli_process`, clippy, fmt.
+
+### Phase 21 Checkpoint
+
+```bash
+cargo test engine::lockout
+cargo test --all-targets --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1202,6 +1255,7 @@ cargo fmt --check
 | **WinRM Auth Module** | Hermetic HTTP Negotiate mocks | `cargo test protocols::winrm` |
 | **MSSQL Auth Module** | Hermetic TDS LOGIN7 mocks | `cargo test protocols::mssql` |
 | **POP3 Auth Module** | Hermetic POP3/POP3S mocks | `cargo test protocols::pop3` |
+| **Lockout Safeguard** | Per-user cool/quarantine | `cargo test engine::lockout` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

@@ -457,6 +457,14 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Security**: Offload crypto key derivation to `spawn_blocking`; never log timestamps or ciphertexts; support `--realm <REALM>` override (auto-derived from target FQDN if omitted).
 - **Module**: `src/protocols/kerberos/` (feature = `kerberos`, in `default`), CLI `kerberos://`, `--realm`; TCP/88 length-prefixed AS exchange via `kerbcore`.
 
+#### K. Intelligent Account Lockout Safeguard (Phase 21)
+
+- **Purpose**: Prevent domain account lockouts during password spray or brute-force audits.
+- **Policy Engine**: In-memory per-user failure counters across targets (`--max-failures-per-user <N>`, default `0` = disabled; `--lockout-cooldown <DURATION>`, default `15m`).
+- **Cooling / Deferral**: After `N` consecutive failures, suspend that user for the cooldown window; workers skip without stalling. Status returns to active when the cooldown elapses (consecutive failure count reset).
+- **Quarantine**: Any `AuthResult::LockedOut` permanently quarantines the user for the session; emit `ReportEvent::AccountQuarantined`.
+- **Module**: `src/engine/lockout.rs` (`LockoutGuard`), wired through `pool` / `spray`.
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:
@@ -845,6 +853,7 @@ betterh/
     │   ├── checkpoint.rs     # Session serialization and resuming (0600)
     │   ├── dryrun.rs         # Pre-flight audit & combination calculator
     │   ├── keys.rs           # Crossterm interactive keystroke listener
+    │   ├── lockout.rs        # Per-user lockout guard (Phase 21)
     │   ├── pool.rs           # Tokio task coordination & semaphores
     │   ├── proxy.rs          # SOCKS5/HTTP routing & proxy pool
     │   ├── request_guard.rs  # Target pacing and terminal stop guard

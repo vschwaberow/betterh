@@ -359,6 +359,32 @@ fn dry_run_text_displays_configured_request_interval() {
 }
 
 #[test]
+fn dry_run_text_displays_lockout_safeguard() {
+    let result = run(
+        &[
+            "ssh",
+            "127.0.0.1",
+            "-u",
+            "test",
+            "-p",
+            "unused",
+            "--dry-run",
+            "--exclude",
+            "127.0.0.1",
+            "--max-failures-per-user",
+            "3",
+            "--lockout-cooldown",
+            "30m",
+        ],
+        &[],
+    );
+    assert!(result.status.success());
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    assert!(stdout.contains("Max failures:  3"), "{stdout}");
+    assert!(stdout.contains("Lockout cool:"), "{stdout}");
+}
+
+#[test]
 fn dry_run_writes_report_file_in_every_display_mode() {
     for format in [None, Some("text"), Some("json"), Some("jsonl")] {
         for quiet in [false, true] {

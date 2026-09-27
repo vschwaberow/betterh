@@ -58,18 +58,28 @@ where
             return Err(PoolError::Cancelled);
         }
 
-        let attempts: Vec<Attempt> = round
-            .pairs
-            .into_iter()
-            .filter(|(target, user)| !locked.contains(&(target.to_string(), user.clone())))
-            .map(|(target, username)| Attempt {
-                target,
-                credential: Credential {
-                    username,
-                    password: Some(round.password.clone()),
-                },
-            })
-            .collect();
+        let attempts: Vec<Attempt> = {
+            let mut allowed = Vec::new();
+            for (target, username) in round.pairs {
+                if locked.contains(&(target.to_string(), username.clone())) {
+                    continue;
+                }
+                if let Some(lockout) = &config.pool.lockout {
+                    let mut guard = lockout.lock().await;
+                    if !guard.allow(&username) {
+                        continue;
+                    }
+                }
+                allowed.push(Attempt {
+                    target,
+                    credential: Credential {
+                        username,
+                        password: Some(round.password.clone()),
+                    },
+                });
+            }
+            allowed
+        };
 
         if !attempts.is_empty() {
             let round_findings =
@@ -89,6 +99,10 @@ where
     Ok(findings)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Spray round owns lockout checks, auth outcomes, and lock-set updates together"
+)]
 async fn run_spray_round<M>(
     module: Arc<M>,
     attempts: Vec<Attempt>,
@@ -137,26 +151,52 @@ where
                 let lock_tx = lock_tx.clone();
                 let cancel = config.cancel.clone();
                 let timeout = config.timeout;
+                let lockout = config.lockout.clone();
+                let quarantine_tx = config.quarantine_tx.clone();
                 join_set.spawn(async move {
                     let _permit = permit;
                     if cancel.is_cancelled() {
                         return;
+                    }
+                    if let Some(lockout) = &lockout {
+                        let mut guard = lockout.lock().await;
+                        if !guard.allow(&attempt.credential.username) {
+                            return;
+                        }
                     }
                     match module
                         .authenticate(&attempt.target, &attempt.credential, timeout)
                         .await
                     {
                         Ok(AuthResult::Success) => {
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                guard.record_success(&attempt.credential.username);
+                            }
                             let _ = find_tx.send(Finding {
                                 target: attempt.target,
                                 credential: attempt.credential,
                             });
                         }
+                        Ok(AuthResult::Failure) => {
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                guard.record_failure(&attempt.credential.username);
+                            }
+                        }
                         Ok(AuthResult::LockedOut) => {
                             let _ = lock_tx.send((
                                 attempt.target.to_string(),
-                                attempt.credential.username,
+                                attempt.credential.username.clone(),
                             ));
+                            if let Some(lockout) = &lockout {
+                                let mut guard = lockout.lock().await;
+                                if guard.quarantine(&attempt.credential.username)
+                                    && let Some(tx) = &quarantine_tx
+                                {
+                                    let _ = tx.send(attempt.credential.username.clone());
+                                }
+                            }
                         }
                         Ok(_) | Err(ProtocolError::Timeout | _) => {}
                     }

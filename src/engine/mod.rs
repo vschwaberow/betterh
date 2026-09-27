@@ -9,6 +9,7 @@ pub mod canary;
 pub mod checkpoint;
 pub mod dryrun;
 pub mod keys;
+pub mod lockout;
 pub mod modules;
 pub mod mutations;
 pub mod pool;
@@ -29,6 +30,7 @@ pub use dryrun::{
     DryRunError, DryRunReport, Reachability, audit, audit_with_cancellation, render_table,
 };
 pub use keys::{RuntimeCommand, interpret_key, listen as listen_keys};
+pub use lockout::{LockoutGuard, UserLockStatus};
 pub use mutations::{
     MutationError, Rule, RuleOp, RuleSet, generate_leet_candidates, generate_season_candidates,
     generate_year_candidates, resolve_rule_year,

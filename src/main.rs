@@ -10,6 +10,10 @@ use clap::{CommandFactory, Parser};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Entrypoint owns dry-run emit, attack dispatch, and reporter setup together"
+)]
 async fn main() -> Result<()> {
     if std::env::args_os().len() == 1 {
         Cli::command().print_help()?;
@@ -100,6 +104,8 @@ async fn main() -> Result<()> {
                 estimated_ms: report.estimated.as_millis(),
                 request_interval_ms: report.request_interval_ms,
                 reachability: report.reachability.to_string(),
+                max_failures_per_user: report.max_failures_per_user,
+                lockout_cooldown_ms: report.lockout_cooldown.as_millis(),
             })?;
             session.finish();
         }

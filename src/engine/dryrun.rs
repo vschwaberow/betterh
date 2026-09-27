@@ -36,6 +36,8 @@ pub struct DryRunReport {
     pub request_interval_ms: u64,
     pub estimated: Duration,
     pub reachability: Reachability,
+    pub max_failures_per_user: u32,
+    pub lockout_cooldown: Duration,
 }
 
 /// Connectivity probe outcome for dry-run.
@@ -120,6 +122,8 @@ pub async fn audit(
         request_interval_ms,
         estimated,
         reachability,
+        max_failures_per_user: cli.max_failures_per_user,
+        lockout_cooldown: cli.lockout_cooldown,
     })
 }
 
@@ -128,6 +132,11 @@ pub async fn audit(
 pub fn render_table(report: &DryRunReport) -> String {
     let service = format!("{:?}", report.service).to_ascii_lowercase();
     let reach = &report.reachability;
+    let max_failures = if report.max_failures_per_user == 0 {
+        "0 (disabled)".to_owned()
+    } else {
+        report.max_failures_per_user.to_string()
+    };
     format!(
         "Dry-run audit\n\
          -------------\n\
@@ -140,6 +149,8 @@ pub fn render_table(report: &DryRunReport) -> String {
          Combinations:  {combinations}\n\
          Concurrency:   {concurrency}\n\
          Min. interval: {request_interval_ms} ms per target\n\
+         Max failures:  {max_failures}\n\
+         Lockout cool:  {lockout_cooldown:?}\n\
          Est. duration: {estimated:?}\n\
          Reachability:  {reach}\n\
          \n\
@@ -152,6 +163,7 @@ pub fn render_table(report: &DryRunReport) -> String {
         combinations = report.combinations,
         concurrency = report.concurrency,
         request_interval_ms = report.request_interval_ms,
+        lockout_cooldown = report.lockout_cooldown,
         estimated = report.estimated,
     )
 }
