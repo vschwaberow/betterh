@@ -1106,19 +1106,21 @@ cargo fmt --check
   - **Files**: `src/protocols/pop3.rs`, `src/protocols/tls.rs`
   - **Verify**: Three-path hermetic tests.
 
-- [ ] **Task 19.3: Result Mapping, SOCKS5, `QUIT`**
+- [x] **Task 19.3: Result Mapping, SOCKS5, `QUIT`**
   - **Description**: `+OK` after PASS → Success; `-ERR` auth fail → Failure; temporary errors → RateLimited where applicable. Always attempt `QUIT`. SOCKS5 support.
   - **Acceptance**: Mapping tests + quit-on-success/failure; timeouts enforced.
   - **Files**: `src/protocols/pop3.rs`
   - **Verify**: Unit/mock tests.
 
-- [ ] **Task 19.4: CLI Wiring (`pop3` / `pop3s`), Docs**
+- [x] **Task 19.4: CLI Wiring (`pop3` / `pop3s`), Docs**
   - **Description**: Services/schemes `pop3://` / `pop3s://`, ports 110/995, runner, CLI tests, README/CHANGELOG/SPEC.
   - **Acceptance**: Dry-run green; feature `pop3` builds cleanly.
   - **Files**: `src/cli.rs`, `src/engine/runner.rs`, `Cargo.toml`, `tests/cli_process.rs`, `README.md`, `CHANGELOG.md`, `docs/SPEC.md`
   - **Verify**: `cargo test protocols::pop3`, clippy, fmt.
 
 ### Phase 19 Checkpoint
+
+Completed (2026-09-27) on `feat/phase-19-pop3-finish`: Tasks 19.1–19.4 add `Pop3Module` (USER/PASS, AUTH PLAIN, STLS/POP3S), CLI `pop3`/`pop3s`, SOCKS5, hermetic mocks.
 
 ```bash
 cargo test protocols::pop3

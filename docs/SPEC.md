@@ -442,7 +442,7 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Auth**: Default `USER`/`PASS`; optional `AUTH PLAIN` when `CAPA` advertises `SASL PLAIN` and prefer-auth-plain is set; always `QUIT`.
 - **TLS**: Implicit TLS before greeting on port 995 / `ssl`; on 110, `CAPA`→`STLS` when advertised then upgrade via `TransportStream` before `PASS`. `--insecure` = cert verify bypass only; never plaintext `PASS` after failed `STLS`.
 - **Security**: Prefer STARTTLS before `PASS` when required; `--insecure` for cert bypass; no credential logging; SOCKS5.
-- **Module**: `src/protocols/pop3.rs` (feature = `pop3`).
+- **Module**: `src/protocols/pop3.rs` (feature = `pop3`, in `default`), CLI `pop3://` / `pop3s://`; SOCKS5 via `--proxy`.
 
 ## 6. Idiomatic Rust Architecture & Patterns
 

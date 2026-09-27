@@ -717,4 +717,77 @@ mod tests {
         assert!(matches!(err, ProtocolError::HandshakeFailed(_)));
         server.await.unwrap();
     }
+
+    #[test]
+    fn map_auth_response_classifies_ok_err_and_rate_limit() {
+        assert_eq!(map_auth_response("+OK welcome"), AuthResult::Success);
+        assert_eq!(map_auth_response("-ERR auth failed"), AuthResult::Failure);
+        assert_eq!(
+            map_auth_response("-ERR [IN-USE] mailbox locked, try later"),
+            AuthResult::RateLimited(Duration::from_secs(5))
+        );
+        assert_eq!(
+            map_auth_response("-ERR server busy"),
+            AuthResult::RateLimited(Duration::from_secs(5))
+        );
+        assert!(matches!(map_auth_response("WTF"), AuthResult::Error(_)));
+    }
+
+    #[test]
+    fn with_proxy_stores_socks_url() {
+        let module = Pop3Module::new().with_proxy(Some("socks5://127.0.0.1:1080".into()));
+        assert_eq!(module.proxy.as_deref(), Some("socks5://127.0.0.1:1080"));
+    }
+
+    #[tokio::test]
+    async fn zero_timeout_returns_timeout_error() {
+        let err = Pop3Module::new()
+            .authenticate(
+                &target(9),
+                &Credential {
+                    username: "a".into(),
+                    password: Some("b".into()),
+                },
+                Duration::ZERO,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ProtocolError::Timeout));
+    }
+
+    #[tokio::test]
+    async fn rate_limited_pass_still_sends_quit() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            socket.write_all(b"+OK ready\r\n").await.unwrap();
+            expect_line(&mut socket, "CAPA\r\n").await;
+            socket.write_all(b"+OK\r\nUSER\r\n.\r\n").await.unwrap();
+            expect_line(&mut socket, "USER alice\r\n").await;
+            socket.write_all(b"+OK\r\n").await.unwrap();
+            expect_line(&mut socket, "PASS secret\r\n").await;
+            socket
+                .write_all(b"-ERR [IN-USE] try later\r\n")
+                .await
+                .unwrap();
+            expect_line(&mut socket, "QUIT\r\n").await;
+            socket.write_all(b"+OK\r\n").await.unwrap();
+        });
+
+        let result = Pop3Module::new()
+            .authenticate(
+                &target(port),
+                &Credential {
+                    username: "alice".into(),
+                    password: Some("secret".into()),
+                },
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, AuthResult::RateLimited(Duration::from_secs(5)));
+        server.await.unwrap();
+    }
 }

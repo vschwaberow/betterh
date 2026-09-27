@@ -14,6 +14,7 @@ Update this file in the same pull request as user-visible changes.
 - Phase 14 refactor: canonical `Service` registry (`src/service.rs`), `engine/modules.rs` builders, shared `protocols/io` dial/CRLF helpers; feasibility codecs remain thin re-exports of production SMB/RDP
 
 ### Added
+- POP3/POP3S ProtocolModule (`pop3` / `pop3s`, ports 110/995): USER/PASS, optional AUTH PLAIN, STLS/implicit TLS, SOCKS5, hermetic mocks
 - WinRM HTTP(S) Negotiate/NTLMv2 ProtocolModule (`winrm` / `winrms`, ports 5985/5986): `/wsman` probe, no Basic fallback, hermetic mocks
 
 - MSSQL TDS ProtocolModule (`mssql` / `mssql://`, port 1433): PRELOGIN + LOGIN7 SQL auth with encrypt-login/full TLS, hermetic mocks
