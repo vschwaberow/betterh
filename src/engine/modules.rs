@@ -42,6 +42,7 @@ pub(crate) fn build_module(
         Service::Kerberos => kerberos_module(cli, proxy),
         Service::Snmp => snmp_module(cli),
         Service::Vnc => vnc_module(proxy),
+        Service::Telnet => telnet_module(proxy),
     }
 }
 
@@ -274,5 +275,13 @@ fn vnc_module(proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError
         "vnc",
         "VNC",
         crate::protocols::VncModule::new().with_proxy(proxy)
+    )
+}
+
+fn telnet_module(proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!(
+        "telnet",
+        "Telnet",
+        crate::protocols::TelnetModule::new().with_proxy(proxy)
     )
 }

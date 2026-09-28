@@ -84,7 +84,7 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 
 | Area | What you get |
 | --- | --- |
-| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`); MSSQL (TDS `LOGIN7`); SNMP (v1/v2c community, v3 USM); Kerberos (AS-REQ); WinRM; POP3; VNC (RFB DES) |
+| Protocols | FTP; HTTP/HTTPS (Basic / form POST / Bearer); SSH (password or key); SMTP/SMTPS (`AUTH PLAIN` / `LOGIN`, STARTTLS); MySQL (`mysql_native_password`, `caching_sha2_password`); PostgreSQL (cleartext / MD5 / `SCRAM-SHA-256`); Redis (RESP `AUTH` inline / ACL); IMAP/IMAPS (`LOGIN`, STARTTLS); LDAP/LDAPS (Simple Bind); SMB (SMBv2 NTLMv2 `SESSION_SETUP`); RDP (CredSSP/NLA `NTLMv2`); MSSQL (TDS `LOGIN7`); SNMP (v1/v2c community, v3 USM); Kerberos (AS-REQ); WinRM; POP3; VNC (RFB DES); Telnet (login prompts) |
 | Wordlists | $O(1)$ streaming wordlists; Hashcat rules (`--rules`); mangling (`-e n,s,r,y,c,l,C`); year overrides (`--rule-year`) |
 | Modes | Vertical brute-force, horizontal password spray with cooldowns |
 | Targets | Host, URL, `-M` file, CIDR, `--exclude` / `--exclude-file` |
@@ -94,6 +94,8 @@ Settings resolve in order: CLI flags, then `BETTERH_*` environment variables, th
 | MCP | `betterh mcp` stdio server: `audit_dryrun`, `audit_execute` (confirm-gated), `validate_scope`, `list_protocols`, `session_status`; resources `betterh://protocols`, `betterh://session/current`, `betterh://reports/{hash}` |
 
 ## Develop
+
+Telnet: `telnet://host` (login/password prompts, port 23).
 
 VNC: `vnc://host` (password-only RFB auth, port 5900).
 
