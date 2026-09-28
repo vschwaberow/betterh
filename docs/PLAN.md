@@ -223,6 +223,15 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 25.2 Generalized string-to-key & PA-ENC-TIMESTAMP              |
 |  - 25.3 Wire AS exchange & --kerberos-etype CLI                   |
 |  - 25.4 Docs, CHANGELOG & quality gate                            |
++---------------------------------+---------------------------------+
+                                  |
+                                  v
++---------------------------------+---------------------------------+
+|   Phase 26: VNC / RFB Authentication Module (TCP 5900)            |
+|  - 26.1 RFB 3.8 / 3.3 handshake & security-type negotiation       |
+|  - 26.2 VNC DES challenge-response (bit-reversed key)             |
+|  - 26.3 CLI vnc://, feature gate, SOCKS5                          |
+|  - 26.4 Docs, CHANGELOG & quality gate                            |
 +-------------------------------------------------------------------+
 ```
 
@@ -1450,6 +1459,47 @@ cargo fmt --check
 
 ---
 
+## Phase 26: VNC / RFB Authentication Module (TCP 5900)
+
+**Goal**: Add a hermetic `ProtocolModule` for classic VNC password authentication over RFB 3.8 (security type 2: DES challenge-response with bit-reversed key), enabling auth audits against remote desktop services without framebuffer/session hijacking.
+
+**Depends on**: Core `ProtocolModule` + Tokio TCP dial / SOCKS5.
+
+### Tasks
+- [x] **Task 26.1: RFB 3.8 Handshake & Security-Type Negotiation**
+  - **Description**: Client version `RFB 003.008\n`, parse server version + security-type list, select type `2` (VNC Authentication); reject `None`-only / unknown-only offers with a clear handshake error. Tolerate RFB 3.3 (`u32` security type).
+  - **Acceptance**: Unit tests cover 3.8 list selection and 3.3 fixed type.
+  - **Files**: `src/protocols/vnc.rs`
+  - **Verify**: `cargo test protocols::vnc`
+
+- [x] **Task 26.2: VNC DES Challenge-Response**
+  - **Description**: Encrypt 16-byte challenge with password-derived 8-byte DES key (truncate/pad, per-byte bit reverse, ECB two blocks). Map security-result `0` → Success, `1` → Failure.
+  - **Acceptance**: Known-vector unit test; hermetic mock accepts correct password and rejects wrong.
+  - **Files**: `src/protocols/vnc.rs`, `Cargo.toml` (`vnc` feature → `des`)
+  - **Verify**: `cargo test protocols::vnc -- --nocapture`
+
+- [x] **Task 26.3: CLI / Service Registry & SOCKS5**
+  - **Description**: `Service::Vnc`, scheme `vnc://`, default port 5900, feature-gated module registration, proxy via shared dialer. Username ignored (password-only auth).
+  - **Acceptance**: `betterh vnc://127.0.0.1 -p secret --dry-run` parses; live mock auth works.
+  - **Files**: `src/service.rs`, `src/engine/modules.rs`, `src/protocols/mod.rs`, `src/cli.rs` (if needed)
+  - **Verify**: `cargo test --all-features`
+
+- [x] **Task 26.4: Docs, CHANGELOG & Quality Gate**
+  - **Description**: SPEC §P, PLAN, README protocol table, CHANGELOG; mark tasks done.
+  - **Acceptance**: Quality gate green.
+  - **Files**: `docs/SPEC.md`, `docs/PLAN.md`, `README.md`, `CHANGELOG.md`
+  - **Verify**: `cargo fmt --check && cargo clippy --all-targets --all-features --locked -- -D warnings && cargo test --all-features --locked`
+
+### Phase 26 Checkpoint
+
+```bash
+cargo test protocols::vnc --all-features --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo fmt --check
+```
+
+---
+
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1471,6 +1521,7 @@ cargo fmt --check
 | **Fuzz Harness** | Decoder smoke / cargo-fuzz targets | `cargo test protocols::fuzz_api` / `cargo fuzz list` |
 | **SNMP authPriv** | DES/AES scoped-PDU round-trips | `cargo test protocols::snmp` |
 | **Kerberos etypes** | AES128/RC4 PA-ENC-TIMESTAMP | `cargo test protocols::kerberos` |
+| **VNC Module** | Hermetic RFB DES challenge mocks | `cargo test protocols::vnc` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |

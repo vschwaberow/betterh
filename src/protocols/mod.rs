@@ -92,6 +92,9 @@ pub mod kerberos;
 #[cfg(feature = "snmp")]
 pub mod snmp;
 
+#[cfg(feature = "vnc")]
+pub mod vnc;
+
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -198,3 +201,6 @@ pub use kerberos::{EtypeMode as KerberosEtypeMode, KerberosModule};
 
 #[cfg(feature = "snmp")]
 pub use snmp::SnmpModule;
+
+#[cfg(feature = "vnc")]
+pub use vnc::VncModule;
