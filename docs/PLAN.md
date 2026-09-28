@@ -232,15 +232,6 @@ This document defines the phased, contract-first implementation roadmap for **Be
 |  - 26.2 VNC DES challenge-response (bit-reversed key)             |
 |  - 26.3 CLI vnc://, feature gate, SOCKS5                          |
 |  - 26.4 Docs, CHANGELOG & quality gate                            |
-+---------------------------------+---------------------------------+
-                                  |
-                                  v
-+---------------------------------+---------------------------------+
-|   Phase 27: Telnet Login Authentication Module (TCP 23)           |
-|  - 27.1 IAC filter & prompt scanner                               |
-|  - 27.2 Login/password dialogue & AuthResult mapping              |
-|  - 27.3 CLI telnet://, feature gate, SOCKS5                       |
-|  - 27.4 Docs, CHANGELOG & quality gate                            |
 +-------------------------------------------------------------------+
 ```
 
@@ -1509,47 +1500,6 @@ cargo fmt --check
 
 ---
 
-## Phase 27: Telnet Login Authentication Module (TCP 23)
-
-**Goal**: Add a hermetic `ProtocolModule` for classic cleartext Telnet login dialogues (banner → username prompt → password prompt) with minimal RFC 854 IAC negotiation so real `login` daemons do not stall; auth-only (no interactive shell).
-
-**Depends on**: Core `ProtocolModule` + Tokio TCP dial / SOCKS5.
-
-### Tasks
-- [x] **Task 27.1: IAC Filter & Prompt Scanner**
-  - **Description**: Byte-stream reader that strips/responds to Telnet IAC (`0xFF`) sequences (refuse unknown options with `DONT`/`WONT`; tolerate `ECHO` / `SUPPRESS-GO-AHEAD`) and detects case-insensitive prompts (`login:`, `username:`, `user name:`, `password:`, `passwd:`).
-  - **Acceptance**: Unit tests cover IAC strip/reply and prompt classification without network I/O.
-  - **Files**: `src/protocols/telnet.rs`
-  - **Verify**: `cargo test protocols::telnet`
-
-- [x] **Task 27.2: Login / Password Dialogue & AuthResult Mapping**
-  - **Description**: After connect, wait for username prompt, send username; wait for password prompt, send password; classify response as Success (shell markers / `last login`) or Failure (`login incorrect`, `authentication failed`, etc.). Ambiguous text → Failure; hard timeout → `ProtocolError::Timeout`.
-  - **Acceptance**: Hermetic mocks for success and failure; no password logging.
-  - **Files**: `src/protocols/telnet.rs`
-  - **Verify**: `cargo test protocols::telnet -- --nocapture`
-
-- [x] **Task 27.3: CLI / Service Registry & SOCKS5**
-  - **Description**: `Service::Telnet`, scheme `telnet://`, default port 23, feature-gated module registration, proxy via shared dialer.
-  - **Acceptance**: `betterh telnet://127.0.0.1 -L u -P p --dry-run` parses; live mock auth works.
-  - **Files**: `src/service.rs`, `src/engine/modules.rs`, `src/protocols/mod.rs`, `Cargo.toml`
-  - **Verify**: `cargo test --all-features`
-
-- [x] **Task 27.4: Docs, CHANGELOG & Quality Gate**
-  - **Description**: SPEC §Q, PLAN, README protocol table, CHANGELOG; mark tasks done.
-  - **Acceptance**: Quality gate green.
-  - **Files**: `docs/SPEC.md`, `docs/PLAN.md`, `README.md`, `CHANGELOG.md`
-  - **Verify**: `cargo fmt --check && cargo clippy --all-targets --all-features --locked -- -D warnings && cargo test --all-features --locked`
-
-### Phase 27 Checkpoint
-
-```bash
-cargo test protocols::telnet --all-features --locked
-cargo clippy --all-targets --all-features --locked -- -D warnings
-cargo fmt --check
-```
-
----
-
 ## Verification Matrix
 
 | Area | Check | Command |
@@ -1572,7 +1522,6 @@ cargo fmt --check
 | **SNMP authPriv** | DES/AES scoped-PDU round-trips | `cargo test protocols::snmp` |
 | **Kerberos etypes** | AES128/RC4 PA-ENC-TIMESTAMP | `cargo test protocols::kerberos` |
 | **VNC Module** | Hermetic RFB DES challenge mocks | `cargo test protocols::vnc` |
-| **Telnet Module** | Hermetic login-prompt mocks | `cargo test protocols::telnet` |
 | **Memory Test** | RSS $< 30\text{ MB}$ under large wordlists | Synthetic stream test in `engine::wordlist` |
 | **Scope Guardrails**| Verify excluded IPs are omitted | Unit test in `engine::scope` |
 | **Skip & Action Rules**| Verify `--exit-user` and `--on-found` hook | Unit test in `engine::actions` |
