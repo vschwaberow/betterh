@@ -493,6 +493,14 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Crypto**: `kerbcore::KerberosKey::string_to_key` for all three etypes; RC4 uses NT hash (no PBKDF2).
 - **CLI**: `--kerberos-etype auto|aes256|aes128|rc4` (default `auto`).
 
+#### P. VNC / RFB Authentication (Phase 26)
+
+- **Transport**: TCP/5900 (default); SOCKS5 via shared dialer.
+- **Protocol**: RFB 3.8 preferred; RFB 3.3 tolerated. Security type `2` (VNC Authentication) only — no Tight/Ultra/VeNCrypt in MVP.
+- **Auth**: Password-only DES challenge-response (8-byte key, per-byte bit reverse, ECB over 16-byte challenge). Username ignored.
+- **Mapping**: SecurityResult `0` → `Success`; `1` → `Failure`; unexpected types / truncated frames → `ProtocolError`.
+- **Module**: `src/protocols/vnc.rs` (feature = `vnc`, in `default`), CLI `vnc://`.
+
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:

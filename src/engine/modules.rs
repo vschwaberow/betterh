@@ -41,6 +41,7 @@ pub(crate) fn build_module(
         Service::Pop3 | Service::Pop3s => pop3_module(cli, proxy),
         Service::Kerberos => kerberos_module(cli, proxy),
         Service::Snmp => snmp_module(cli),
+        Service::Vnc => vnc_module(proxy),
     }
 }
 
@@ -266,4 +267,12 @@ fn snmp_module(cli: &Cli) -> Result<Arc<dyn ProtocolModule>, RunError> {
             .with_priv(priv_protocol)
             .with_priv_password(cli.module.snmp_priv_password.clone())
     })
+}
+
+fn vnc_module(proxy: Option<String>) -> Result<Arc<dyn ProtocolModule>, RunError> {
+    gated!(
+        "vnc",
+        "VNC",
+        crate::protocols::VncModule::new().with_proxy(proxy)
+    )
 }
