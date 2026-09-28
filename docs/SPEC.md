@@ -501,18 +501,6 @@ Streaming Hashcat-compatible rule mutations and enterprise/seasonal mangling wit
 - **Mapping**: SecurityResult `0` → `Success`; `1` → `Failure`; unexpected types / truncated frames → `ProtocolError`.
 - **Module**: `src/protocols/vnc.rs` (feature = `vnc`, in `default`), CLI `vnc://`.
 
-#### Q. Telnet Login Authentication (Phase 27)
-
-- **Transport**: TCP/23 (default); SOCKS5 via shared dialer. Cleartext only — no TLS/`telnets` in MVP.
-- **Protocol**: RFC 854 Telnet. Minimal IAC handling: strip commands from the text stream; refuse unknown options with `DONT`/`WONT`; tolerate `ECHO` and `SUPPRESS-GO-AHEAD`.
-- **Auth**: Classic login dialogue — wait for username prompt (`login:`, `username:`, `user name:`), send username; wait for password prompt (`password:`, `passwd:`), send password. Case-insensitive prompt match.
-- **Mapping**:
-  - Success: shell markers (`$`, `#`, `>`, `%`) or `last login` without a preceding failure phrase.
-  - Failure: `login incorrect`, `login failed`, `authentication failed`, `access denied`, `incorrect`.
-  - Ambiguous response text → `AuthResult::Failure` (safe default); hard I/O timeout → `ProtocolError::Timeout`.
-- **Out of scope**: TN3270, Kerberos Telnet, interactive post-login shell, custom scripted dialogues.
-- **Module**: `src/protocols/telnet.rs` (feature = `telnet`, in `default`), CLI `telnet://`.
-
 ## 6. Idiomatic Rust Architecture & Patterns
 
 Betterh follows the Apollo GraphQL Rust Best Practices Handbook and Tokio concurrency patterns:

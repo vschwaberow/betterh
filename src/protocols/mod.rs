@@ -95,9 +95,6 @@ pub mod snmp;
 #[cfg(feature = "vnc")]
 pub mod vnc;
 
-#[cfg(feature = "telnet")]
-pub mod telnet;
-
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -207,6 +204,3 @@ pub use snmp::SnmpModule;
 
 #[cfg(feature = "vnc")]
 pub use vnc::VncModule;
-
-#[cfg(feature = "telnet")]
-pub use telnet::TelnetModule;

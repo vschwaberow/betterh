@@ -640,9 +640,9 @@ mod tests {
             vec!["ssh://localhost/path"],
             vec!["https://localhost/#fragment"],
             vec!["ssh://localhost:0"],
-            vec!["gopher", "localhost"],
             vec!["ssh://localhost:99999"],
             vec!["ssh://"],
+            vec!["telnet", "localhost"],
             vec!["ssh", "192.168.1.0/33"],
             vec!["ssh", "localhost", "--body", "test"],
             vec!["https://localhost", "--ssh-key", "key"],
@@ -652,12 +652,9 @@ mod tests {
             vec!["ssh://localhost", "-M", "targets"],
         ] {
             let mut argv = vec!["betterh"];
-            argv.extend(args.clone());
+            argv.extend(args);
             let cli = Cli::try_parse_from(argv).unwrap();
-            assert!(
-                cli.validate().is_err(),
-                "expected validation error for args {args:?}"
-            );
+            assert!(cli.validate().is_err());
         }
     }
 
